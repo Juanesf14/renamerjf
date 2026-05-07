@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 
-export default function FileRenamer({ selectedProvider }) {
+export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [docTypes, setDocTypes] = useState([])
   const [form, setForm] = useState({
     docType: '',
@@ -12,54 +12,114 @@ export default function FileRenamer({ selectedProvider }) {
   })
   const [currentFile, setCurrentFile] = useState(null)
   const [newName, setNewName] = useState('')
+  const [entityName, setEntityName] = useState('')
 
   useEffect(() => {
     api.get('/document-types').then(({ data }) => setDocTypes(data))
   }, [])
 
   useEffect(() => {
+    if (selectedProvider) setEntityName(selectedProvider.name)
+  }, [selectedProvider])
+
+  useEffect(() => {
     buildName()
-  }, [form, selectedProvider])
+  }, [form, entityName])
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return ''
+    const [y, m, d] = dateStr.split('-')
+    return `${m}.${d}.${y.slice(2)}`
+  }
+
   const buildName = () => {
-    if (!form.docType || !selectedProvider || !form.dosStart) {
+    if (!form.docType || !entityName) {
       setNewName('')
       return
     }
-    const entity = selectedProvider.name.replace(/\s+/g, '')
-    const start = form.dosStart.replace(/-/g, '.').slice(2)
-    const end = form.dosEnd ? form.dosEnd.replace(/-/g, '.').slice(2) : ''
-    const pip = form.pipExhausted === 'Y' ? '_Y' : '_N'
-    const name = `${form.docType}_${entity}_${start}${end ? '_' + end : ''}${pip}`
+
+    const facility    = entityName
+    const dosStart    = formatDate(form.dosStart)
+    const dosEnd      = formatDate(form.dosEnd)
+    const updateDate  = formatDate(form.updateDate)
+    const dosRange    = dosEnd ? `${dosStart}-${dosEnd}` : dosStart
+
+    let name = ''
+
+    if (form.docType === 'B') {
+      if (!form.dosStart || !form.updateDate) { setNewName(''); return }
+      name = `Bills-${facility}-DOS ${dosRange}-updated as of ${updateDate}`
+
+    } else if (form.docType === 'MR') {
+      if (!form.dosStart) { setNewName(''); return }
+      name = `Records-${facility}-DOS ${dosRange}`
+
+    } else if (form.docType === 'HL') {
+      if (!form.updateDate) { setNewName(''); return }
+      name = `${facility} Health Lien-updated as of ${updateDate}`
+
+    } else if (form.docType === 'PIP') {
+      if (!form.updateDate) { setNewName(''); return }
+      if (form.pipExhausted === 'Y') {
+        name = `${facility} PIP Log-exhausted-updated as of ${updateDate}`
+      } else {
+        name = `${facility} PIP Log-updated as of ${updateDate}`
+      }
+    }
+
     setNewName(name)
   }
 
-  const handleSelectFolder = async () => {
-    const folderPath = await window.electronAPI.selectFolder()
-    if (!folderPath) return
-    const files = await window.electronAPI.readFolder(folderPath)
-    if (files.length > 0) setCurrentFile(files[0])
+  const handleSelectFile = async () => {
+    const file = await window.electronAPI.selectFile()
+    if (!file) return
+    setCurrentFile(file)
   }
 
   const handleRename = async () => {
     if (!currentFile || !newName) return
     const ext = currentFile.name.split('.').pop()
     const dir = currentFile.path.replace(currentFile.name, '')
-    await window.electronAPI.renameFile({
-      oldPath: currentFile.path,
-      newPath: `${dir}${newName}.${ext}`
-    })
-    alert(`Archivo renombrado: ${newName}.${ext}`)
-    setCurrentFile(null)
-    setNewName('')
+    const newFullName = `${newName}.${ext}`
+
+    try {
+      await window.electronAPI.renameFile({
+        oldPath: currentFile.path,
+        newPath: `${dir}${newFullName}`
+      })
+
+      const docType = docTypes.find(dt => dt.code === form.docType)
+      await api.post('/history', {
+        provider_id: selectedProvider?.id || null,
+        doc_type_id: docType?.id || null,
+        original_name: currentFile.name,
+        new_name: newFullName,
+        dos_start: form.dosStart || null,
+        dos_end: form.dosEnd || null,
+        update_date: form.updateDate || null,
+        pip_exhausted: form.pipExhausted === 'Y'
+      })
+
+      alert(`✅ Archivo renombrado: ${newFullName}`)
+      setCurrentFile(null)
+      setNewName('')
+      setEntityName('')
+      setForm({ docType: '', dosStart: '', dosEnd: '', updateDate: '', pipExhausted: 'N' })
+      if (onRenameSuccess) onRenameSuccess()
+
+    } catch (err) {
+      console.error('Error al renombrar:', err)
+      alert('❌ Error al renombrar el archivo')
+    }
   }
 
   const handleClear = () => {
     setForm({ docType: '', dosStart: '', dosEnd: '', updateDate: '', pipExhausted: 'N' })
     setCurrentFile(null)
     setNewName('')
+    setEntityName('')
   }
 
   return (
@@ -70,10 +130,10 @@ export default function FileRenamer({ selectedProvider }) {
         <span style={styles.tabActive}>File Selection</span>
       </div>
 
-      <div style={styles.preview} onClick={handleSelectFolder}>
+      <div style={styles.preview} onClick={handleSelectFile}>
         {currentFile
           ? <p style={styles.previewText}>📄 {currentFile.name}</p>
-          : <p style={styles.previewPlaceholder}>Click para seleccionar carpeta</p>
+          : <p style={styles.previewPlaceholder}>Click para seleccionar archivo</p>
         }
       </div>
 
@@ -90,35 +150,42 @@ export default function FileRenamer({ selectedProvider }) {
       <div style={styles.field}>
         <label style={styles.label}>Entity (hospital/insurance)</label>
         <input
-          style={{ ...styles.input, background: '#2d3748', color: '#718096' }}
-          value={selectedProvider?.name || 'Selecciona un provider →'}
-          readOnly
+          style={styles.input}
+          placeholder="Escribe o selecciona un provider..."
+          value={entityName}
+          onChange={e => setEntityName(e.target.value)}
         />
       </div>
 
-      <div style={styles.row}>
-        <div style={styles.field}>
-          <label style={styles.label}>DOS Start</label>
-          <input style={styles.input} type="date" name="dosStart" value={form.dosStart} onChange={handleChange} />
+      {(form.docType === 'B' || form.docType === 'MR') && (
+        <div style={styles.row}>
+          <div style={styles.field}>
+            <label style={styles.label}>DOS Start</label>
+            <input style={styles.input} type="date" name="dosStart" value={form.dosStart} onChange={handleChange} />
+          </div>
+          <div style={styles.field}>
+            <label style={styles.label}>DOS End</label>
+            <input style={styles.input} type="date" name="dosEnd" value={form.dosEnd} onChange={handleChange} />
+          </div>
         </div>
+      )}
+
+      {(form.docType === 'B' || form.docType === 'HL' || form.docType === 'PIP') && (
         <div style={styles.field}>
-          <label style={styles.label}>DOS End</label>
-          <input style={styles.input} type="date" name="dosEnd" value={form.dosEnd} onChange={handleChange} />
+          <label style={styles.label}>Updated as of</label>
+          <input style={styles.input} type="date" name="updateDate" value={form.updateDate} onChange={handleChange} />
         </div>
-      </div>
+      )}
 
-      <div style={styles.field}>
-        <label style={styles.label}>Update Date</label>
-        <input style={styles.input} type="date" name="updateDate" value={form.updateDate} onChange={handleChange} />
-      </div>
-
-      <div style={styles.field}>
-        <label style={styles.label}>PIP Exhausted? (Y/N)</label>
-        <select name="pipExhausted" value={form.pipExhausted} onChange={handleChange} style={styles.input}>
-          <option value="N">N</option>
-          <option value="Y">Y</option>
-        </select>
-      </div>
+      {form.docType === 'PIP' && (
+        <div style={styles.field}>
+          <label style={styles.label}>PIP Exhausted? (Y/N)</label>
+          <select name="pipExhausted" value={form.pipExhausted} onChange={handleChange} style={styles.input}>
+            <option value="N">N</option>
+            <option value="Y">Y</option>
+          </select>
+        </div>
+      )}
 
       <div style={styles.namePreview}>
         <p style={styles.nameLabel}>Current: <span style={styles.nameCurrent}>{currentFile?.name || '—'}</span></p>
@@ -137,7 +204,7 @@ export default function FileRenamer({ selectedProvider }) {
 
 const styles = {
   container: {
-    height: '100%',
+    minHeight: '100%',
     padding: '1rem',
     background: '#16213e',
     borderRadius: 10,
@@ -156,7 +223,7 @@ const styles = {
     borderRadius: 6,
   },
   preview: {
-    height: 80,
+    minHeight: 80,
     background: '#0f3460',
     borderRadius: 8,
     display: 'flex',
@@ -164,8 +231,10 @@ const styles = {
     justifyContent: 'center',
     cursor: 'pointer',
     border: '1px dashed #2d3748',
+    padding: '8px',
+    textAlign: 'center',
   },
-  previewText: { color: '#e2e8f0', margin: 0, fontSize: 13 },
+  previewText: { color: '#e2e8f0', margin: 0, fontSize: 12, wordBreak: 'break-all' },
   previewPlaceholder: { color: '#718096', margin: 0, fontSize: 12 },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
   label: { color: '#a0aec0', fontSize: 12 },
@@ -177,6 +246,8 @@ const styles = {
     color: '#e2e8f0',
     fontSize: 13,
     outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
   },
   row: { display: 'flex', gap: 8 },
   namePreview: {
@@ -188,9 +259,9 @@ const styles = {
     gap: 4,
   },
   nameLabel: { color: '#718096', margin: 0, fontSize: 12 },
-  nameCurrent: { color: '#a0aec0' },
-  nameNew: { color: '#68d391', fontWeight: 600 },
-  actions: { display: 'flex', gap: 8, marginTop: 'auto' },
+  nameCurrent: { color: '#a0aec0', wordBreak: 'break-all' },
+  nameNew: { color: '#68d391', fontWeight: 600, wordBreak: 'break-all' },
+  actions: { display: 'flex', gap: 8, paddingBottom: '1rem' },
   btnPrimary: {
     flex: 1,
     padding: '9px',

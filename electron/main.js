@@ -12,7 +12,6 @@ function createWindow() {
       nodeIntegration: false
     }
   })
-
   win.loadURL('http://localhost:5173')
 }
 
@@ -31,6 +30,20 @@ ipcMain.handle('select-folder', async () => {
     properties: ['openDirectory']
   })
   return result.canceled ? null : result.filePaths[0]
+})
+
+ipcMain.handle('select-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'Documentos', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] },
+      { name: 'Todos los archivos', extensions: ['*'] }
+    ]
+  })
+  if (result.canceled) return null
+  const filePath = result.filePaths[0]
+  const name = filePath.split('/').pop()
+  return { name, path: filePath }
 })
 
 ipcMain.handle('read-folder', async (_, folderPath) => {

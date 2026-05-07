@@ -5,6 +5,11 @@ import FileRenamer from '../components/FileRenamer'
 
 export default function Dashboard({ user, onLogout }) {
   const [selectedProvider, setSelectedProvider] = useState(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const handleRenameSuccess = () => {
+    setRefreshTrigger(prev => prev + 1)
+  }
 
   return (
     <div style={styles.container}>
@@ -21,7 +26,10 @@ export default function Dashboard({ user, onLogout }) {
 
       <div style={styles.layout}>
         <div style={styles.panel}>
-          <FileRenamer selectedProvider={selectedProvider} />
+          <FileRenamer
+            selectedProvider={selectedProvider}
+            onRenameSuccess={handleRenameSuccess}
+          />
         </div>
         <div style={styles.panel}>
           <ProviderList
@@ -30,7 +38,10 @@ export default function Dashboard({ user, onLogout }) {
           />
         </div>
         <div style={styles.panel}>
-          <ProviderCard provider={selectedProvider} />
+          <ProviderCard
+            provider={selectedProvider}
+            refreshTrigger={refreshTrigger}
+          />
         </div>
       </div>
     </div>

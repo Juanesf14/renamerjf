@@ -1,21 +1,23 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import api from '../services/api'
 
-export default function ProviderCard({ provider }) {
+export default function ProviderCard({ provider, refreshTrigger }) {
   const [detail, setDetail] = useState(null)
 
-  useEffect(() => {
-    if (provider) fetchDetail()
-  }, [provider])
-
-  const fetchDetail = async () => {
+  const fetchDetail = useCallback(async () => {
+    if (!provider) return
     try {
       const { data } = await api.get(`/providers/${provider.id}`)
       setDetail(data)
     } catch (err) {
       console.error('Error cargando detalle', err)
     }
-  }
+  }, [provider])
+
+  useEffect(() => {
+    setDetail(null)
+    fetchDetail()
+  }, [fetchDetail, refreshTrigger])
 
   if (!provider) return (
     <div style={styles.empty}>
