@@ -13,6 +13,7 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [currentFile, setCurrentFile] = useState(null)
   const [newName, setNewName] = useState('')
   const [entityName, setEntityName] = useState('')
+  const [suggestedProvider, setSuggestedProvider] = useState(null)
 
   useEffect(() => {
     api.get('/document-types').then(({ data }) => setDocTypes(data))
@@ -40,26 +41,23 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       return
     }
 
-    const facility    = entityName
-    const dosStart    = formatDate(form.dosStart)
-    const dosEnd      = formatDate(form.dosEnd)
-    const updateDate  = formatDate(form.updateDate)
-    const dosRange    = dosEnd ? `${dosStart}-${dosEnd}` : dosStart
+    const facility   = entityName
+    const dosStart   = formatDate(form.dosStart)
+    const dosEnd     = formatDate(form.dosEnd)
+    const updateDate = formatDate(form.updateDate)
+    const dosRange   = dosEnd ? `${dosStart}-${dosEnd}` : dosStart
 
     let name = ''
 
     if (form.docType === 'B') {
       if (!form.dosStart || !form.updateDate) { setNewName(''); return }
       name = `Bills-${facility}-DOS ${dosRange}-updated as of ${updateDate}`
-
     } else if (form.docType === 'MR') {
       if (!form.dosStart) { setNewName(''); return }
       name = `Records-${facility}-DOS ${dosRange}`
-
     } else if (form.docType === 'HL') {
       if (!form.updateDate) { setNewName(''); return }
       name = `${facility} Health Lien-updated as of ${updateDate}`
-
     } else if (form.docType === 'PIP') {
       if (!form.updateDate) { setNewName(''); return }
       if (form.pipExhausted === 'Y') {
@@ -76,6 +74,22 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
     const file = await window.electronAPI.selectFile()
     if (!file) return
     setCurrentFile(file)
+    setSuggestedProvider(null)
+
+    // Solo analizar PDFs
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (ext !== 'pdf') return
+
+    try {
+      const { data } = await api.post('/analyze', { filePath: file.path })
+      if (data.suggestion) {
+        const { provider_id, name, confidence, method } = data.suggestion
+        setEntityName(name)
+        setSuggestedProvider({ provider_id, name, confidence, method })
+      }
+    } catch (err) {
+      console.error('Error en Doc Analyzer:', err)
+    }
   }
 
   const handleRename = async () => {
@@ -92,7 +106,7 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
 
       const docType = docTypes.find(dt => dt.code === form.docType)
       await api.post('/history', {
-        provider_id: selectedProvider?.id || null,
+        provider_id: selectedProvider?.id || suggestedProvider?.provider_id || null,
         doc_type_id: docType?.id || null,
         original_name: currentFile.name,
         new_name: newFullName,
@@ -106,6 +120,7 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       setCurrentFile(null)
       setNewName('')
       setEntityName('')
+      setSuggestedProvider(null)
       setForm({ docType: '', dosStart: '', dosEnd: '', updateDate: '', pipExhausted: 'N' })
       if (onRenameSuccess) onRenameSuccess()
 
@@ -120,6 +135,7 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
     setCurrentFile(null)
     setNewName('')
     setEntityName('')
+    setSuggestedProvider(null)
   }
 
   return (
@@ -136,6 +152,15 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
           : <p style={styles.previewPlaceholder}>Click para seleccionar archivo</p>
         }
       </div>
+
+      {suggestedProvider && (
+        <div style={styles.suggestion}>
+          <span>🤖 Suggested: <strong>{suggestedProvider.name}</strong></span>
+          <span style={styles.confidence}>
+            {Math.round(suggestedProvider.confidence * 100)}% — {suggestedProvider.method}
+          </span>
+        </div>
+      )}
 
       <div style={styles.field}>
         <label style={styles.label}>Document Type</label>
@@ -236,6 +261,21 @@ const styles = {
   },
   previewText: { color: '#e2e8f0', margin: 0, fontSize: 12, wordBreak: 'break-all' },
   previewPlaceholder: { color: '#718096', margin: 0, fontSize: 12 },
+  suggestion: {
+    background: '#1a3a2a',
+    border: '1px solid #2d6a4f',
+    borderRadius: 8,
+    padding: '8px 12px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: 12,
+    color: '#68d391',
+  },
+  confidence: {
+    color: '#a0aec0',
+    fontSize: 11,
+  },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
   label: { color: '#a0aec0', fontSize: 12 },
   input: {

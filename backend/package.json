@@ -20,7 +20,7 @@
     "express": "^5.2.1",
     "fuse.js": "^7.3.0",
     "jsonwebtoken": "^9.0.3",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "^1.1.1",
     "uuid": "^14.0.0"
   }
 }
