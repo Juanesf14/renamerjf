@@ -2,12 +2,14 @@ const express = require('express')
 const { v4: uuidv4 } = require('uuid')
 const Fuse = require('fuse.js')
 const db = require('../db/schema')
-const authMiddleware = require('../middleware/auth')
+const { authMiddleware, adminMiddleware } = require('../middleware/auth')
 
 const router = express.Router()
 
+// Todos necesitan estar autenticados
 router.use(authMiddleware)
 
+// GET / — cualquier usuario autenticado puede ver
 router.get('/', (req, res) => {
   const { q, type } = req.query
   let query = 'SELECT * FROM providers WHERE 1=1'
@@ -25,6 +27,7 @@ router.get('/', (req, res) => {
   res.json(providers)
 })
 
+// GET /suggest — cualquier usuario autenticado
 router.post('/suggest', (req, res) => {
   const { text } = req.body
   if (!text) return res.status(400).json({ error: 'Texto requerido' })
@@ -45,6 +48,7 @@ router.post('/suggest', (req, res) => {
   })
 })
 
+// GET /:id — cualquier usuario autenticado
 router.get('/:id', (req, res) => {
   const provider = db.prepare('SELECT * FROM providers WHERE id = ?').get(req.params.id)
   if (!provider) return res.status(404).json({ error: 'Provider no encontrado' })
@@ -58,7 +62,8 @@ router.get('/:id', (req, res) => {
   res.json({ provider, history })
 })
 
-router.post('/', (req, res) => {
+// POST, PUT, DELETE — solo admin
+router.post('/', adminMiddleware, (req, res) => {
   const { name, type, specialty, phone, fax, email, address, hours, portal_url, notes } = req.body
   if (!name || !type) return res.status(400).json({ error: 'Nombre y tipo son requeridos' })
   const id = uuidv4()
@@ -70,7 +75,7 @@ router.post('/', (req, res) => {
   res.status(201).json(provider)
 })
 
-router.put('/:id', (req, res) => {
+router.put('/:id', adminMiddleware, (req, res) => {
   const { name, type, specialty, phone, fax, email, address, hours, portal_url, notes } = req.body
   const exists = db.prepare('SELECT id FROM providers WHERE id = ?').get(req.params.id)
   if (!exists) return res.status(404).json({ error: 'Provider no encontrado' })
@@ -84,7 +89,7 @@ router.put('/:id', (req, res) => {
   res.json(provider)
 })
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', adminMiddleware, (req, res) => {
   const exists = db.prepare('SELECT id FROM providers WHERE id = ?').get(req.params.id)
   if (!exists) return res.status(404).json({ error: 'Provider no encontrado' })
   db.prepare('DELETE FROM providers WHERE id = ?').run(req.params.id)

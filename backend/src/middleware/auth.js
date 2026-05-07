@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken')
 
-module.exports = (req, res, next) => {
+const authMiddleware = (req, res, next) => {
   const header = req.headers['authorization']
   if (!header) return res.status(401).json({ error: 'Token requerido' })
 
@@ -12,3 +12,11 @@ module.exports = (req, res, next) => {
     res.status(401).json({ error: 'Token inválido o expirado' })
   }
 }
+
+const adminMiddleware = (req, res, next) => {
+  if (req.user?.role !== 'admin')
+    return res.status(403).json({ error: 'Acceso restringido a administradores' })
+  next()
+}
+
+module.exports = { authMiddleware, adminMiddleware }
