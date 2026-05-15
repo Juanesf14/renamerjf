@@ -832,7 +832,7 @@ export default function CaseTracker() {
 
     XLSX.utils.book_append_sheet(wb, ws, 'Cases')
 
-    const filename = `KP_Cases_Week_${fmt(monday)}_to_${fmt(sunday)}.xlsx`
+    const filename = `Cases_Week_${fmt(monday)}_to_${fmt(sunday)}.xlsx`
     XLSX.writeFile(wb, filename)
   }
 

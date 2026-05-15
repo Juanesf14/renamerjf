@@ -17,9 +17,9 @@
     "frontend"
   ],
   "build": {
-    "appId": "com.kannerpin.renamerjf",
+    "appId": "com.renamerjf.app",
     "productName": "RenamerJF",
-    "copyright": "Copyright © 2026 Kanner & Pintaluga",
+    "copyright": "Copyright © 2026 RenamerJF",
     "directories": {
       "output": "dist-electron",
       "buildResources": "build-assets"
