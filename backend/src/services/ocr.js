@@ -1,12 +1,43 @@
-const { createWorker } = require('tesseract.js')
-const { createCanvas } = require('canvas')
+const { pathToFileURL } = require('url')
+
+// Lazy loaders — evitan crash en Windows si canvas.node no es compatible
+let _createCanvas = null
+let _createWorker = null
+
+function getCreateCanvas() {
+  if (_createCanvas === null) {
+    try {
+      _createCanvas = require('canvas').createCanvas
+    } catch (e) {
+      console.warn('[ocr] canvas no disponible:', e.message)
+      _createCanvas = false
+    }
+  }
+  return _createCanvas || null
+}
+
+function getCreateWorker() {
+  if (_createWorker === null) {
+    try {
+      _createWorker = require('tesseract.js').createWorker
+    } catch (e) {
+      console.warn('[ocr] tesseract.js no disponible:', e.message)
+      _createWorker = false
+    }
+  }
+  return _createWorker || null
+}
 
 // Renderiza la primera página del PDF a un PNG buffer
 const pdfToImageBuffer = async (filePath) => {
+  const createCanvas = getCreateCanvas()
+  if (!createCanvas) throw new Error('canvas not available')
+
   // pdfjs-dist v5 es ESM — usamos import() dinámico
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
-  const loadingTask = pdfjsLib.getDocument({ url: `file://${filePath}`, verbosity: 0 })
+  const fileUrl = pathToFileURL(filePath).href
+  const loadingTask = pdfjsLib.getDocument({ url: fileUrl, verbosity: 0 })
   const pdf = await loadingTask.promise
   const page = await pdf.getPage(1)
 
@@ -35,17 +66,25 @@ const pdfToImageBuffer = async (filePath) => {
 }
 
 const ocrExtract = async (filePath) => {
-  const imageBuffer = await pdfToImageBuffer(filePath)
+  const createWorker = getCreateWorker()
+  if (!createWorker) return ''
 
-  const worker = await createWorker('eng', 1, {
-    logger: () => {},
-    errorHandler: () => {},
-  })
+  try {
+    const imageBuffer = await pdfToImageBuffer(filePath)
 
-  const { data: { text } } = await worker.recognize(imageBuffer)
-  await worker.terminate()
+    const worker = await createWorker('eng', 1, {
+      logger: () => {},
+      errorHandler: () => {},
+    })
 
-  return text || ''
+    const { data: { text } } = await worker.recognize(imageBuffer)
+    await worker.terminate()
+
+    return text || ''
+  } catch (err) {
+    console.warn('[ocr] extracción fallida:', err.message)
+    return ''
+  }
 }
 
 module.exports = { ocrExtract }

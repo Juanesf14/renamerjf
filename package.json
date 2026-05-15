@@ -5,7 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:electron\"",
-    "dev:backend": "npm run dev --workspace=backend",
+    "dev:backend": "nodemon backend/src/index.js",
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build:frontend": "npm run build --workspace=frontend",
@@ -14,8 +14,7 @@
     "build:all": "npm run build:frontend && electron-builder --mac --win"
   },
   "workspaces": [
-    "frontend",
-    "backend"
+    "frontend"
   ],
   "build": {
     "appId": "com.kannerpin.renamerjf",
@@ -28,24 +27,46 @@
     "files": [
       "electron/**/*",
       "frontend/dist/**/*",
-      "backend/src/**/*",
+      "backend/src/**",
       "package.json"
     ],
-    "extraResources": [],
+    "extraResources": [
+      {
+        "from": "backend/renamerjf.db",
+        "to": "renamerjf.db"
+      }
+    ],
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
       "category": "public.app-category.productivity",
       "icon": "build-assets/icon.icns"
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build-assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "installerLanguages": ["en_US"]
+      "installerLanguages": [
+        "en_US"
+      ]
     },
     "npmRebuild": true
   },
@@ -54,6 +75,7 @@
     "concurrently": "^9.2.1",
     "electron": "^42.0.0",
     "electron-builder": "^26.8.1",
+    "nodemon": "^3.1.14",
     "wait-on": "^9.0.5"
   },
   "dependencies": {

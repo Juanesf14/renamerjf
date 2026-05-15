@@ -1,6 +1,8 @@
+const path = require('path')
+require('dotenv').config({ path: path.join(__dirname, '../../.env') })
+
 const express = require('express')
 const cors = require('cors')
-require('dotenv').config()
 const db = require('./db/schema')
 const authRoutes = require('./routes/auth')
 const providerRoutes = require('./routes/providers')
@@ -11,8 +13,8 @@ const casesRoutes = require('./routes/cases')
 const app = express()
 const PORT = process.env.PORT || 3001
 
-app.use(cors())
-app.use(express.json())
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3001'] }))
+app.use(express.json({ limit: '10mb' }))
 
 app.use('/api/auth', authRoutes)
 app.use('/api/providers', providerRoutes)

@@ -36,7 +36,7 @@ export default function Dashboard({ user, onLogout }) {
               style={mode === 'cases' ? styles.modeActive : styles.modeInactive}
               onClick={() => setMode('cases')}
             >
-              📅 Cases
+              📋 Cases
             </button>
           </div>
         </div>

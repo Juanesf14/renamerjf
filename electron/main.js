@@ -73,9 +73,12 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
 
+// Normaliza separadores de path para Windows
+const normPath = p => (p || '').replace(/\\/g, '/')
+
 ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
-  return result.canceled ? null : result.filePaths[0]
+  return result.canceled ? null : normPath(result.filePaths[0])
 })
 
 ipcMain.handle('select-file', async () => {
@@ -88,15 +91,15 @@ ipcMain.handle('select-file', async () => {
   })
   if (result.canceled) return null
   const filePath = result.filePaths[0]
-  const name = filePath.split('/').pop()
-  return { name, path: filePath }
+  const name = path.basename(filePath)
+  return { name, path: normPath(filePath) }
 })
 
 ipcMain.handle('read-folder', async (_, folderPath) => {
   const entries = fs.readdirSync(folderPath, { withFileTypes: true })
   return entries
     .filter(e => e.isFile())
-    .map(e => ({ name: e.name, path: path.join(folderPath, e.name) }))
+    .map(e => ({ name: e.name, path: normPath(path.join(folderPath, e.name)) }))
 })
 
 ipcMain.handle('rename-file', async (_, { oldPath, newPath }) => {
