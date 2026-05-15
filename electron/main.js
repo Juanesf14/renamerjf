@@ -33,7 +33,7 @@ function startBackend() {
   }
 
   try {
-    require('./backend/src/index.js')
+    require('../backend/src/index.js')
     console.log('[backend] iniciado en puerto', process.env.PORT)
   } catch (err) {
     console.error('[backend] error al iniciar:', err)
