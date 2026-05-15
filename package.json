@@ -8,16 +8,66 @@
     "dev:backend": "npm run dev --workspace=backend",
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
-    "build": "npm run build --workspace=frontend"
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:mac": "npm run build:frontend && electron-builder --mac",
+    "build:win": "npm run build:frontend && electron-builder --win",
+    "build:all": "npm run build:frontend && electron-builder --mac --win"
   },
   "workspaces": [
     "frontend",
     "backend"
   ],
+  "build": {
+    "appId": "com.kannerpin.renamerjf",
+    "productName": "RenamerJF",
+    "copyright": "Copyright © 2026 Kanner & Pintaluga",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "build-assets"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "backend/src/**/*",
+      "package.json"
+    ],
+    "extraResources": [],
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "category": "public.app-category.productivity",
+      "icon": "build-assets/icon.icns"
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build-assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "installerLanguages": ["en_US"]
+    },
+    "npmRebuild": true
+  },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "concurrently": "^9.2.1",
     "electron": "^42.0.0",
     "electron-builder": "^26.8.1",
     "wait-on": "^9.0.5"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.9.0",
+    "canvas": "^3.2.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "fuse.js": "^7.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.7.284",
+    "tesseract.js": "^7.0.0",
+    "uuid": "^14.0.0"
   }
 }

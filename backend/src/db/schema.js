@@ -1,7 +1,10 @@
 const Database = require('better-sqlite3')
+const bcrypt = require('bcryptjs')
+const { v4: uuidv4 } = require('uuid')
 const path = require('path')
 
-const db = new Database(path.join(__dirname, '../../renamerjf.db'))
+const dbPath = process.env.DB_PATH || path.join(__dirname, '../../renamerjf.db')
+const db = new Database(dbPath)
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -50,6 +53,18 @@ db.exec(`
     FOREIGN KEY (provider_id) REFERENCES providers(id),
     FOREIGN KEY (doc_type_id) REFERENCES document_types(id)
   );
+
+  CREATE TABLE IF NOT EXISTS cases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    num TEXT UNIQUE NOT NULL,
+    created TEXT, last TEXT, first TEXT, rb TEXT, dol TEXT, open TEXT,
+    c15 TEXT, c21 TEXT, c99 TEXT, c99b TEXT,
+    migrated TEXT, fu TEXT, taskflow TEXT, phase TEXT,
+    qd TEXT, qddue TEXT, gsd TEXT, gscdue TEXT, routed TEXT,
+    urb TEXT, notes TEXT, bv TEXT, bvdue TEXT, completed TEXT,
+    added_on TEXT DEFAULT (datetime('now')),
+    source TEXT DEFAULT 'manual'
+  );
 `)
 
 // Seed de document_types si la tabla está vacía
@@ -67,6 +82,25 @@ if (count.count === 0) {
   ]
   types.forEach(([code, label]) => insert.run(code, label))
   console.log('Document types seeded.')
+}
+
+// Seed de usuarios iniciales desde variables de entorno (primer arranque)
+const usersCount = db.prepare('SELECT COUNT(*) as count FROM users').get()
+if (usersCount.count === 0) {
+  const seedUsers = [
+    { name: process.env.SEED_ADMIN_NAME,  email: process.env.SEED_ADMIN_EMAIL,  password: process.env.SEED_ADMIN_PASSWORD,  role: 'admin' },
+    { name: process.env.SEED_USER_NAME,   email: process.env.SEED_USER_EMAIL,   password: process.env.SEED_USER_PASSWORD,   role: 'user'  },
+    { name: process.env.SEED_USER2_NAME,  email: process.env.SEED_USER2_EMAIL,  password: process.env.SEED_USER2_PASSWORD,  role: 'user'  },
+  ]
+  const insertUser = db.prepare(
+    'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)'
+  )
+  for (const u of seedUsers) {
+    if (u.name && u.email && u.password) {
+      insertUser.run(uuidv4(), u.name, u.email, bcrypt.hashSync(u.password, 10), u.role)
+      console.log(`User seeded: ${u.email} (${u.role})`)
+    }
+  }
 }
 
 module.exports = db

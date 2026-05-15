@@ -6,6 +6,7 @@ const authRoutes = require('./routes/auth')
 const providerRoutes = require('./routes/providers')
 const historyRoutes = require('./routes/history')
 const analyzeRoutes = require('./routes/analyze')
+const casesRoutes = require('./routes/cases')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -17,6 +18,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/providers', providerRoutes)
 app.use('/api/history', historyRoutes)
 app.use('/api/analyze', analyzeRoutes)
+app.use('/api/cases', casesRoutes)
 
 app.get('/api/document-types', (req, res) => {
   const types = db.prepare('SELECT * FROM document_types').all()

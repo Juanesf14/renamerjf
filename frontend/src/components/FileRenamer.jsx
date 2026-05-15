@@ -14,6 +14,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [newName, setNewName] = useState('')
   const [entityName, setEntityName] = useState('')
   const [suggestedProvider, setSuggestedProvider] = useState(null)
+  const [autoFilledFields, setAutoFilledFields] = useState({})
+  const [flags, setFlags] = useState(null)
 
   useEffect(() => {
     api.get('/document-types').then(({ data }) => setDocTypes(data))
@@ -82,11 +84,24 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
 
     try {
       const { data } = await api.post('/analyze', { filePath: file.path })
+      const filled = {}
+
       if (data.suggestion) {
         const { provider_id, name, confidence, method } = data.suggestion
         setEntityName(name)
-        setSuggestedProvider({ provider_id, name, confidence, method })
+        setSuggestedProvider({ provider_id, name, confidence, method, usedOcr: data.usedOcr })
       }
+
+      if (data.dates) {
+        const updates = {}
+        if (data.dates.dosStart)   { updates.dosStart   = data.dates.dosStart;   filled.dosStart   = true }
+        if (data.dates.dosEnd)     { updates.dosEnd     = data.dates.dosEnd;     filled.dosEnd     = true }
+        if (data.dates.updateDate) { updates.updateDate = data.dates.updateDate; filled.updateDate = true }
+        if (Object.keys(updates).length > 0) setForm(f => ({ ...f, ...updates }))
+      }
+
+      setAutoFilledFields(filled)
+      if (data.flags) setFlags(data.flags)
     } catch (err) {
       console.error('Error en Doc Analyzer:', err)
     }
@@ -116,11 +131,13 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
         pip_exhausted: form.pipExhausted === 'Y'
       })
 
-      alert(`✅ Archivo renombrado: ${newFullName}`)
       setCurrentFile(null)
       setNewName('')
       setEntityName('')
       setSuggestedProvider(null)
+      setAutoFilledFields({})
+      setFlags(null)
+      alert(`✅ Archivo renombrado: ${newFullName}`)
       setForm({ docType: '', dosStart: '', dosEnd: '', updateDate: '', pipExhausted: 'N' })
       if (onRenameSuccess) onRenameSuccess()
 
@@ -136,6 +153,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
     setNewName('')
     setEntityName('')
     setSuggestedProvider(null)
+    setAutoFilledFields({})
+    setFlags(null)
   }
 
   return (
@@ -158,7 +177,31 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
           <span>🤖 Suggested: <strong>{suggestedProvider.name}</strong></span>
           <span style={styles.confidence}>
             {Math.round(suggestedProvider.confidence * 100)}% — {suggestedProvider.method}
+            {suggestedProvider.usedOcr && <span style={styles.ocrBadge}>OCR</span>}
           </span>
+        </div>
+      )}
+
+      {flags?.hasAmbulance && (
+        <div style={{ ...styles.flagBanner, borderColor: '#f6ad55', background: '#2d1f0a' }}>
+          <span style={{ color: '#f6ad55', fontWeight: 700 }}>🚑 Ambulance transport detected</span>
+          <span style={{ color: '#a0aec0', fontSize: 11 }}>
+            {flags.ambulanceCompany
+              ? <>Company: <strong style={{ color: '#f6ad55' }}>{flags.ambulanceCompany}</strong></>
+              : 'Verify if this affects billing or document type'
+            }
+          </span>
+        </div>
+      )}
+
+      {flags?.hasReferral && (
+        <div style={{ ...styles.flagBanner, borderColor: '#76e4f7', background: '#0a2233' }}>
+          <span style={{ color: '#76e4f7', fontWeight: 700 }}>↗ Referral detected</span>
+          {flags.referrals?.length > 0 && (
+            <span style={{ color: '#a0aec0', fontSize: 11 }}>
+              {flags.referrals.join(' · ')}
+            </span>
+          )}
         </div>
       )}
 
@@ -185,20 +228,38 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       {(form.docType === 'B' || form.docType === 'MR') && (
         <div style={styles.row}>
           <div style={styles.field}>
-            <label style={styles.label}>DOS Start</label>
-            <input style={styles.input} type="date" name="dosStart" value={form.dosStart} onChange={handleChange} />
+            <label style={styles.label}>
+              DOS Start {autoFilledFields.dosStart && <span style={styles.autoBadge}>auto</span>}
+            </label>
+            <input
+              style={{ ...styles.input, ...(autoFilledFields.dosStart ? styles.inputAuto : {}) }}
+              type="date" name="dosStart" value={form.dosStart}
+              onChange={e => { handleChange(e); setAutoFilledFields(f => ({ ...f, dosStart: false })) }}
+            />
           </div>
           <div style={styles.field}>
-            <label style={styles.label}>DOS End</label>
-            <input style={styles.input} type="date" name="dosEnd" value={form.dosEnd} onChange={handleChange} />
+            <label style={styles.label}>
+              DOS End {autoFilledFields.dosEnd && <span style={styles.autoBadge}>auto</span>}
+            </label>
+            <input
+              style={{ ...styles.input, ...(autoFilledFields.dosEnd ? styles.inputAuto : {}) }}
+              type="date" name="dosEnd" value={form.dosEnd}
+              onChange={e => { handleChange(e); setAutoFilledFields(f => ({ ...f, dosEnd: false })) }}
+            />
           </div>
         </div>
       )}
 
       {(form.docType === 'B' || form.docType === 'HL' || form.docType === 'PIP') && (
         <div style={styles.field}>
-          <label style={styles.label}>Updated as of</label>
-          <input style={styles.input} type="date" name="updateDate" value={form.updateDate} onChange={handleChange} />
+          <label style={styles.label}>
+            Updated as of {autoFilledFields.updateDate && <span style={styles.autoBadge}>auto</span>}
+          </label>
+          <input
+            style={{ ...styles.input, ...(autoFilledFields.updateDate ? styles.inputAuto : {}) }}
+            type="date" name="updateDate" value={form.updateDate}
+            onChange={e => { handleChange(e); setAutoFilledFields(f => ({ ...f, updateDate: false })) }}
+          />
         </div>
       )}
 
@@ -275,6 +336,27 @@ const styles = {
   confidence: {
     color: '#a0aec0',
     fontSize: 11,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ocrBadge: {
+    display: 'inline-block',
+    padding: '1px 5px',
+    background: '#744210',
+    color: '#f6ad55',
+    borderRadius: 4,
+    fontSize: 10,
+    fontWeight: 600,
+  },
+  flagBanner: {
+    borderRadius: 8,
+    border: '1px solid',
+    padding: '8px 12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    fontSize: 12,
   },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
   label: { color: '#a0aec0', fontSize: 12 },
@@ -290,6 +372,21 @@ const styles = {
     boxSizing: 'border-box',
   },
   row: { display: 'flex', gap: 8 },
+  autoBadge: {
+    display: 'inline-block',
+    marginLeft: 4,
+    padding: '1px 5px',
+    background: '#2d6a4f',
+    color: '#68d391',
+    borderRadius: 4,
+    fontSize: 10,
+    fontWeight: 600,
+    verticalAlign: 'middle',
+  },
+  inputAuto: {
+    borderColor: '#2d6a4f',
+    background: '#1a3a2a',
+  },
   namePreview: {
     background: '#0f3460',
     borderRadius: 8,
