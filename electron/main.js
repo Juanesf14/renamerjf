@@ -20,16 +20,9 @@ function startBackend() {
   process.env.NODE_ENV = 'production'
   process.env.PORT     = process.env.PORT || '3001'
 
-  // Credenciales seed (solo se usan si la DB está vacía en el primer inicio)
-  process.env.SEED_ADMIN_NAME     = 'Corina Ortega'
-  process.env.SEED_ADMIN_EMAIL    = 'cortega@kpattorney.com'
-  process.env.SEED_ADMIN_PASSWORD = 'BossMR2026'
-  process.env.SEED_USER_NAME      = 'Juan Fajardo'
-  process.env.SEED_USER_EMAIL     = 'juanesf14@gmail.com'
-  process.env.SEED_USER_PASSWORD  = 'Saravalentina146*'
-  process.env.SEED_USER2_NAME     = 'Juan Fajardo'
-  process.env.SEED_USER2_EMAIL    = 'jfajardo@kpattorney.com'
-  process.env.SEED_USER2_PASSWORD = 'Saravalentina146*'
+  // Credenciales seed — configurar en .env antes del primer inicio
+  // SEED_ADMIN_NAME, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
+  // SEED_USER_NAME,  SEED_USER_EMAIL,  SEED_USER_PASSWORD
 
   // JWT_SECRET: usa variable de entorno si existe, si no genera uno persistente
   if (!process.env.JWT_SECRET) {
