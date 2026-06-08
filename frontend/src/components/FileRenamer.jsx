@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 import ChatPanel from './ChatPanel'
+import AIConsentModal from './AIConsentModal'
 
 export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [docTypes, setDocTypes] = useState([])
@@ -19,6 +20,10 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [flags, setFlags] = useState(null)
   const [sessionId, setSessionId] = useState(null)
   const [chatOpen, setChatOpen] = useState(false)
+  // AI consent is requested once per session before sending any document to Gemini.
+  // Not persisted to localStorage — each app session requires a fresh acknowledgement.
+  const [aiConsent, setAiConsent] = useState(null) // null = not asked | 'pending' | 'granted' | 'denied'
+  const [pendingFile, setPendingFile] = useState(null) // file waiting for consent
 
   useEffect(() => {
     api.get('/document-types').then(({ data }) => setDocTypes(data))
@@ -75,16 +80,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
     setNewName(name)
   }
 
-  const handleSelectFile = async () => {
-    const file = await window.electronAPI.selectFile()
-    if (!file) return
-    setCurrentFile(file)
-    setSuggestedProvider(null)
-
-    // Solo analizar PDFs
-    const ext = file.name.split('.').pop().toLowerCase()
-    if (ext !== 'pdf') return
-
+  // Core analysis logic — called after consent is confirmed.
+  const runAnalysis = async (file) => {
     try {
       const { data } = await api.post('/analyze', { filePath: file.path })
       const filled = {}
@@ -108,8 +105,52 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       setAutoFilledFields(filled)
       if (data.flags) setFlags(data.flags)
     } catch (err) {
-      console.error('Error en Doc Analyzer:', err)
+      console.error('Analysis error:', err)
     }
+  }
+
+  const handleSelectFile = async () => {
+    const file = await window.electronAPI.selectFile()
+    if (!file) return
+
+    setCurrentFile(file)
+    setSuggestedProvider(null)
+
+    // Only PDF and image files can be analyzed.
+    const ext = file.name.split('.').pop().toLowerCase()
+    const analyzable = ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'bmp', 'webp']
+    if (!analyzable.includes(ext)) return
+
+    // If consent was already granted this session, analyze immediately.
+    if (aiConsent === 'granted') {
+      runAnalysis(file)
+      return
+    }
+
+    // If consent was denied, still set the file but skip AI analysis entirely.
+    if (aiConsent === 'denied') {
+      runAnalysis(file) // local-only (server still runs regex/fuzzy, no Gemini)
+      return
+    }
+
+    // First time — show the consent modal before sending anything to the server.
+    setPendingFile(file)
+    setAiConsent('pending')
+  }
+
+  const handleConsentAccept = () => {
+    setAiConsent('granted')
+    if (pendingFile) runAnalysis(pendingFile)
+    setPendingFile(null)
+  }
+
+  const handleConsentCancel = () => {
+    setAiConsent('denied')
+    // Still run local analysis (regex + fuzzy), just no Gemini escalation.
+    // The server only calls Gemini if GEMINI_API_KEY is set, so no special
+    // flag is needed — local analysis always runs regardless of consent.
+    if (pendingFile) runAnalysis(pendingFile)
+    setPendingFile(null)
   }
 
   const handleRename = async () => {
@@ -168,6 +209,13 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
 
   return (
     <div style={styles.container}>
+      {aiConsent === 'pending' && (
+        <AIConsentModal
+          onAccept={handleConsentAccept}
+          onCancel={handleConsentCancel}
+        />
+      )}
+
       <h3 style={styles.title}>File Renamer</h3>
 
       <div style={styles.tabs}>

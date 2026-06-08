@@ -1,7 +1,11 @@
-const fs = require('fs')
+const fs   = require('fs')
+const path = require('path')
 const pdfParse = require('pdf-parse')
 const Fuse = require('fuse.js')
-const { ocrExtract } = require('./ocr')
+const { ocrExtract, ocrExtractImage } = require('./ocr')
+
+// File extensions treated as raster images — skip pdf-parse, go straight to OCR.
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.webp'])
 
 // If pdf-parse extracts fewer than this many characters the PDF is likely scanned,
 // so we fall back to OCR before giving up on text extraction.
@@ -216,21 +220,35 @@ const prepareTextForClaude = (text) => {
 }
 
 /**
- * Main entry point. Tries pdf-parse first; falls back to Tesseract OCR if the
- * extracted text is shorter than OCR_THRESHOLD (indicating a scanned image PDF).
+ * Main entry point. Routes the file to the appropriate text extractor:
+ *  - Images (JPG/PNG/etc.) → Tesseract OCR directly (no PDF render step needed)
+ *  - PDFs with embedded text → pdf-parse
+ *  - Scanned PDFs (text < OCR_THRESHOLD) → render page to image → Tesseract OCR
+ *
  * Always returns extractedText so the caller can store it for the chat session.
  */
 const analyzeDocument = async (filePath, providers) => {
   try {
-    let text = await extractText(filePath)
+    const ext = path.extname(filePath).toLowerCase()
+    const isImage = IMAGE_EXTENSIONS.has(ext)
+
+    let text = ''
     let usedOcr = false
 
-    if (text.trim().length < OCR_THRESHOLD) {
-      try {
-        text = await ocrExtract(filePath)
-        usedOcr = true
-      } catch (ocrErr) {
-        console.error('OCR fallback failed:', ocrErr.message)
+    if (isImage) {
+      // Image files go directly to OCR — no intermediate PDF rendering needed.
+      text    = await ocrExtractImage(filePath)
+      usedOcr = true
+    } else {
+      text = await extractText(filePath)
+
+      if (text.trim().length < OCR_THRESHOLD) {
+        try {
+          text = await ocrExtract(filePath)
+          usedOcr = true
+        } catch (ocrErr) {
+          console.error('OCR fallback failed:', ocrErr.message)
+        }
       }
     }
 

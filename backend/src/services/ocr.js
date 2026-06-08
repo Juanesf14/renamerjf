@@ -94,4 +94,32 @@ const ocrExtract = async (filePath) => {
   }
 }
 
-module.exports = { ocrExtract }
+/**
+ * Extracts text from a JPG, PNG, or other image file via Tesseract OCR.
+ * Skips the PDF→image render step since the file is already an image.
+ * Returns an empty string on failure so the caller degrades gracefully.
+ */
+const ocrExtractImage = async (filePath) => {
+  const createWorker = getCreateWorker()
+  if (!createWorker) return ''
+
+  try {
+    const fs = require('fs')
+    const imageBuffer = fs.readFileSync(filePath)
+
+    const worker = await createWorker('eng', 1, {
+      logger:       () => {},
+      errorHandler: () => {},
+    })
+
+    const { data: { text } } = await worker.recognize(imageBuffer)
+    await worker.terminate()
+
+    return text || ''
+  } catch (err) {
+    console.warn('[ocr] image extraction failed:', err.message)
+    return ''
+  }
+}
+
+module.exports = { ocrExtract, ocrExtractImage }
