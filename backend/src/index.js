@@ -9,6 +9,7 @@ const providerRoutes = require('./routes/providers')
 const historyRoutes = require('./routes/history')
 const analyzeRoutes = require('./routes/analyze')
 const casesRoutes = require('./routes/cases')
+const chatRoutes  = require('./routes/chat')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -21,6 +22,7 @@ app.use('/api/providers', providerRoutes)
 app.use('/api/history', historyRoutes)
 app.use('/api/analyze', analyzeRoutes)
 app.use('/api/cases', casesRoutes)
+app.use('/api/chat',  chatRoutes)
 
 app.get('/api/document-types', (req, res) => {
   const types = db.prepare('SELECT * FROM document_types').all()

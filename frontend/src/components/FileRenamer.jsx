@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
+import ChatPanel from './ChatPanel'
 
 export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [docTypes, setDocTypes] = useState([])
@@ -16,6 +17,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [suggestedProvider, setSuggestedProvider] = useState(null)
   const [autoFilledFields, setAutoFilledFields] = useState({})
   const [flags, setFlags] = useState(null)
+  const [sessionId, setSessionId] = useState(null)
+  const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => {
     api.get('/document-types').then(({ data }) => setDocTypes(data))
@@ -86,6 +89,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       const { data } = await api.post('/analyze', { filePath: file.path })
       const filled = {}
 
+      if (data.sessionId) setSessionId(data.sessionId)
+
       if (data.suggestion) {
         const { provider_id, name, confidence, method } = data.suggestion
         setEntityName(name)
@@ -137,6 +142,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       setSuggestedProvider(null)
       setAutoFilledFields({})
       setFlags(null)
+      setSessionId(null)
+      setChatOpen(false)
       alert(`✅ Archivo renombrado: ${newFullName}`)
       setForm({ docType: '', dosStart: '', dosEnd: '', updateDate: '', pipExhausted: 'N' })
       if (onRenameSuccess) onRenameSuccess()
@@ -155,6 +162,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
     setSuggestedProvider(null)
     setAutoFilledFields({})
     setFlags(null)
+    setSessionId(null)
+    setChatOpen(false)
   }
 
   return (
@@ -183,11 +192,11 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       )}
 
       {flags?.hasAmbulance && (
-        <div style={{ ...styles.flagBanner, borderColor: '#f6ad55', background: '#2d1f0a' }}>
-          <span style={{ color: '#f6ad55', fontWeight: 700 }}>🚑 Ambulance transport detected</span>
-          <span style={{ color: '#a0aec0', fontSize: 11 }}>
+        <div style={{ ...styles.flagBanner, borderColor: '#B8860B', background: '#2A1F08' }}>
+          <span style={{ color: '#C9A84C', fontWeight: 600, fontSize: 12 }}>🚑 Ambulance transport detected</span>
+          <span style={{ color: '#8B95A1', fontSize: 11 }}>
             {flags.ambulanceCompany
-              ? <>Company: <strong style={{ color: '#f6ad55' }}>{flags.ambulanceCompany}</strong></>
+              ? <>Company: <strong style={{ color: '#E8C96A' }}>{flags.ambulanceCompany}</strong></>
               : 'Verify if this affects billing or document type'
             }
           </span>
@@ -195,10 +204,10 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       )}
 
       {flags?.hasReferral && (
-        <div style={{ ...styles.flagBanner, borderColor: '#76e4f7', background: '#0a2233' }}>
-          <span style={{ color: '#76e4f7', fontWeight: 700 }}>↗ Referral detected</span>
+        <div style={{ ...styles.flagBanner, borderColor: '#2E6DA4', background: '#0A1E32' }}>
+          <span style={{ color: '#7BB3D9', fontWeight: 600, fontSize: 12 }}>↗ Referral detected</span>
           {flags.referrals?.length > 0 && (
-            <span style={{ color: '#a0aec0', fontSize: 11 }}>
+            <span style={{ color: '#8B95A1', fontSize: 11 }}>
               {flags.referrals.join(' · ')}
             </span>
           )}
@@ -284,57 +293,82 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
         </button>
         <button style={styles.btnSecondary} onClick={handleClear}>Clear Fields</button>
       </div>
+
+      {sessionId && (
+        <button style={styles.chatBtn} onClick={() => setChatOpen(true)}>
+          💬 Ask AI about this document
+        </button>
+      )}
+
+      {chatOpen && sessionId && (
+        <ChatPanel
+          sessionId={sessionId}
+          documentName={currentFile?.name}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </div>
   )
 }
 
 const styles = {
   container: {
-    minHeight: '100%',
+    flex: 1,
+    minHeight: 0,
     padding: '1rem',
-    background: '#16213e',
-    borderRadius: 10,
+    background: '#1B2D42',
+    borderRadius: 4,
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
     gap: 10,
   },
-  title: { color: '#e2e8f0', margin: 0, fontSize: 15 },
+  title: {
+    color: '#C9A84C',
+    margin: 0,
+    fontSize: 14,
+    fontWeight: 600,
+    fontFamily: "'Cormorant Garamond', Georgia, serif",
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+  },
   tabs: { display: 'flex', gap: 8 },
   tabActive: {
-    color: '#e2e8f0',
-    fontSize: 13,
-    padding: '4px 12px',
-    background: '#0f3460',
-    borderRadius: 6,
+    color: '#F5F0E8',
+    fontSize: 12,
+    padding: '3px 12px',
+    background: '#243447',
+    borderRadius: 2,
+    border: '1px solid #2E4057',
   },
   preview: {
-    minHeight: 80,
-    background: '#0f3460',
-    borderRadius: 8,
+    minHeight: 76,
+    background: '#243447',
+    borderRadius: 3,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    border: '1px dashed #2d3748',
+    border: '1px dashed #2E4057',
     padding: '8px',
     textAlign: 'center',
+    transition: 'border-color 0.2s',
   },
-  previewText: { color: '#e2e8f0', margin: 0, fontSize: 12, wordBreak: 'break-all' },
-  previewPlaceholder: { color: '#718096', margin: 0, fontSize: 12 },
+  previewText: { color: '#F5F0E8', margin: 0, fontSize: 12, wordBreak: 'break-all' },
+  previewPlaceholder: { color: '#556270', margin: 0, fontSize: 12 },
   suggestion: {
-    background: '#1a3a2a',
-    border: '1px solid #2d6a4f',
-    borderRadius: 8,
+    background: 'rgba(201,168,76,0.08)',
+    border: '1px solid rgba(201,168,76,0.35)',
+    borderRadius: 3,
     padding: '8px 12px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     fontSize: 12,
-    color: '#68d391',
+    color: '#C9A84C',
   },
   confidence: {
-    color: '#a0aec0',
+    color: '#8B95A1',
     fontSize: 11,
     display: 'flex',
     alignItems: 'center',
@@ -343,14 +377,14 @@ const styles = {
   ocrBadge: {
     display: 'inline-block',
     padding: '1px 5px',
-    background: '#744210',
-    color: '#f6ad55',
-    borderRadius: 4,
+    background: '#2A1F08',
+    color: '#C9A84C',
+    borderRadius: 2,
     fontSize: 10,
     fontWeight: 600,
   },
   flagBanner: {
-    borderRadius: 8,
+    borderRadius: 3,
     border: '1px solid',
     padding: '8px 12px',
     display: 'flex',
@@ -359,65 +393,82 @@ const styles = {
     fontSize: 12,
   },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
-  label: { color: '#a0aec0', fontSize: 12 },
+  label: { color: '#8B95A1', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' },
   input: {
     padding: '7px 10px',
-    borderRadius: 6,
-    border: '1px solid #2d3748',
-    background: '#0f3460',
-    color: '#e2e8f0',
+    borderRadius: 3,
+    border: '1px solid #2E4057',
+    background: '#243447',
+    color: '#F5F0E8',
     fontSize: 13,
     outline: 'none',
     width: '100%',
     boxSizing: 'border-box',
+    fontFamily: "'Inter', system-ui, sans-serif",
   },
   row: { display: 'flex', gap: 8 },
   autoBadge: {
     display: 'inline-block',
     marginLeft: 4,
     padding: '1px 5px',
-    background: '#2d6a4f',
-    color: '#68d391',
-    borderRadius: 4,
+    background: 'rgba(201,168,76,0.15)',
+    color: '#C9A84C',
+    borderRadius: 2,
     fontSize: 10,
     fontWeight: 600,
     verticalAlign: 'middle',
   },
   inputAuto: {
-    borderColor: '#2d6a4f',
-    background: '#1a3a2a',
+    borderColor: 'rgba(201,168,76,0.4)',
+    background: 'rgba(201,168,76,0.06)',
   },
   namePreview: {
-    background: '#0f3460',
-    borderRadius: 8,
+    background: '#0D1B2A',
+    borderRadius: 3,
     padding: '10px 12px',
     display: 'flex',
     flexDirection: 'column',
     gap: 4,
+    border: '1px solid #2E4057',
   },
-  nameLabel: { color: '#718096', margin: 0, fontSize: 12 },
-  nameCurrent: { color: '#a0aec0', wordBreak: 'break-all' },
-  nameNew: { color: '#68d391', fontWeight: 600, wordBreak: 'break-all' },
+  nameLabel: { color: '#556270', margin: 0, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' },
+  nameCurrent: { color: '#8B95A1', wordBreak: 'break-all', fontSize: 12 },
+  nameNew: { color: '#C9A84C', fontWeight: 600, wordBreak: 'break-all', fontSize: 12 },
   actions: { display: 'flex', gap: 8, paddingBottom: '1rem' },
   btnPrimary: {
     flex: 1,
     padding: '9px',
-    borderRadius: 8,
+    borderRadius: 3,
     border: 'none',
-    background: '#e94560',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 600,
+    background: '#C9A84C',
+    color: '#0D1B2A',
+    fontSize: 13,
+    fontWeight: 700,
     cursor: 'pointer',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
   },
   btnSecondary: {
     flex: 1,
     padding: '9px',
-    borderRadius: 8,
-    border: '1px solid #2d3748',
+    borderRadius: 3,
+    border: '1px solid #2E4057',
     background: 'transparent',
-    color: '#a0aec0',
-    fontSize: 14,
+    color: '#8B95A1',
+    fontSize: 13,
     cursor: 'pointer',
+  },
+  chatBtn: {
+    width: '100%',
+    padding: '9px',
+    borderRadius: 3,
+    border: '1px solid rgba(201,168,76,0.35)',
+    background: 'rgba(201,168,76,0.08)',
+    color: '#C9A84C',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginBottom: '0.5rem',
+    letterSpacing: '0.04em',
   },
 }

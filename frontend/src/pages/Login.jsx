@@ -30,7 +30,7 @@ export default function Login({ onLogin }) {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>RenamerJF</h1>
+        <h1 style={styles.title}>K&P · RenamerJF</h1>
         <p style={styles.subtitle}>Medical Records Manager</p>
         <form onSubmit={handleSubmit} style={styles.form}>
           {isRegister && (
@@ -83,28 +83,33 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
-    background: '#1a1a2e',
+    background: '#0D1B2A',
   },
   card: {
-    background: '#16213e',
-    borderRadius: 12,
+    background: '#1B2D42',
+    borderRadius: 4,
     padding: '2.5rem',
-    width: 360,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+    width: 380,
+    boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+    borderTop: '3px solid #C9A84C',
   },
   title: {
-    color: '#e2e8f0',
+    color: '#C9A84C',
     margin: 0,
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 700,
     textAlign: 'center',
+    fontFamily: "'Cormorant Garamond', Georgia, serif",
+    letterSpacing: '0.04em',
   },
   subtitle: {
-    color: '#718096',
+    color: '#8B95A1',
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 32,
-    fontSize: 13,
+    fontSize: 12,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
   },
   form: {
     display: 'flex',
@@ -113,23 +118,26 @@ const styles = {
   },
   input: {
     padding: '10px 14px',
-    borderRadius: 8,
-    border: '1px solid #2d3748',
-    background: '#0f3460',
-    color: '#e2e8f0',
+    borderRadius: 3,
+    border: '1px solid #2E4057',
+    background: '#243447',
+    color: '#F5F0E8',
     fontSize: 14,
     outline: 'none',
+    fontFamily: "'Inter', system-ui, sans-serif",
   },
   button: {
     marginTop: 8,
     padding: '11px',
-    borderRadius: 8,
+    borderRadius: 3,
     border: 'none',
-    background: '#e94560',
-    color: '#fff',
-    fontSize: 15,
+    background: '#C9A84C',
+    color: '#0D1B2A',
+    fontSize: 14,
     fontWeight: 600,
     cursor: 'pointer',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
   },
   error: {
     color: '#fc8181',
@@ -137,13 +145,13 @@ const styles = {
     margin: 0,
   },
   toggle: {
-    color: '#718096',
+    color: '#556270',
     textAlign: 'center',
     marginTop: 20,
     fontSize: 13,
   },
   link: {
-    color: '#e94560',
+    color: '#C9A84C',
     cursor: 'pointer',
     fontWeight: 600,
   },

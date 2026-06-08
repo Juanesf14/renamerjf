@@ -11,14 +11,44 @@ const extractText = async (filePath) => {
   return data.text || ''
 }
 
+const countOccurrences = (text, name) => {
+  // Para nombres cortos (< 5 chars) exige word boundary para evitar falsos positivos
+  if (name.length < 5) {
+    const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
+    return (text.match(re) || []).length
+  }
+  let count = 0
+  let idx = 0
+  const lower = text.toLowerCase()
+  const lname = name.toLowerCase()
+  while ((idx = lower.indexOf(lname, idx)) !== -1) { count++; idx += lname.length }
+  return count
+}
+
 const exactMatch = (text, providers) => {
-  const normalized = text.toLowerCase()
+  let best = null
+  let bestScore = 0
+
   for (const p of providers) {
-    if (normalized.includes(p.name.toLowerCase())) {
-      return { provider_id: p.id, name: p.name, confidence: 1.0, method: 'exact' }
+    const count = countOccurrences(text, p.name)
+    if (count === 0) continue
+
+    // Ambulancias reciben un peso menor para perder en empate contra hospitales/aseguradoras
+    const score = p.type === 'Ambulance' ? count * 0.6 : count
+
+    if (score > bestScore) {
+      bestScore = score
+      best = {
+        provider_id: p.id,
+        name: p.name,
+        confidence: 1.0,
+        method: 'exact',
+        occurrences: count,
+      }
     }
   }
-  return null
+
+  return best
 }
 
 const fuzzyMatch = (text, providers) => {
@@ -34,24 +64,42 @@ const fuzzyMatch = (text, providers) => {
     includeScore: true
   })
 
-  let bestResult = null
-  let bestScore = Infinity
+  // Acumular el mejor score por provider (no retornar al primer match)
+  const scores = new Map() // provider_id → { item, bestScore, hits }
 
   for (const chunk of chunks) {
     const results = fuse.search(chunk)
-    if (results.length > 0 && results[0].score < bestScore) {
-      bestScore = results[0].score
-      bestResult = results[0]
+    if (!results.length) continue
+    const r = results[0]
+    const id = r.item.id
+    const prev = scores.get(id)
+    if (!prev || r.score < prev.bestScore) {
+      scores.set(id, { item: r.item, bestScore: r.score, hits: (prev?.hits || 0) + 1 })
+    } else if (prev) {
+      prev.hits++
     }
   }
 
-  if (!bestResult) return null
-  const confidence = +(1 - bestResult.score).toFixed(2)
+  if (scores.size === 0) return null
+
+  // Elegir el provider con más hits; en empate, el de menor score (mejor match)
+  let best = null
+  for (const entry of scores.values()) {
+    if (
+      !best ||
+      entry.hits > best.hits ||
+      (entry.hits === best.hits && entry.bestScore < best.bestScore)
+    ) {
+      best = entry
+    }
+  }
+
+  const confidence = +(1 - best.bestScore).toFixed(2)
   if (confidence < 0.4) return null
 
   return {
-    provider_id: bestResult.item.id,
-    name: bestResult.item.name,
+    provider_id: best.item.id,
+    name: best.item.name,
     confidence,
     method: 'fuzzy'
   }
@@ -135,6 +183,15 @@ const extractDates = (text) => {
   return result
 }
 
+const prepareTextForClaude = (text) => {
+  return text
+    .slice(0, 3000)
+    .replace(/^\s*[\d\s.\-|,$]{15,}\s*$/gm, '') // líneas que son tablas de números
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{4,}/g, '   ')
+    .trim()
+}
+
 const analyzeDocument = async (filePath, providers) => {
   try {
     let text = await extractText(filePath)
@@ -150,22 +207,22 @@ const analyzeDocument = async (filePath, providers) => {
     }
 
     if (!text || text.trim().length === 0)
-      return { suggestion: null, reason: 'No se pudo extraer texto del documento' }
+      return { suggestion: null, reason: 'No se pudo extraer texto del documento', extractedText: '' }
 
     const dates = extractDates(text)
     const flags = detectFlags(text)
 
     const exact = exactMatch(text, providers)
-    if (exact) return { suggestion: exact, dates, flags, usedOcr }
+    if (exact) return { suggestion: exact, dates, flags, usedOcr, extractedText: text }
 
     const fuzzy = fuzzyMatch(text, providers)
-    if (fuzzy) return { suggestion: fuzzy, dates, flags, usedOcr }
+    if (fuzzy) return { suggestion: fuzzy, dates, flags, usedOcr, extractedText: text }
 
-    return { suggestion: null, dates, flags, usedOcr, reason: 'No se encontró coincidencia' }
+    return { suggestion: null, dates, flags, usedOcr, reason: 'No se encontró coincidencia', extractedText: text }
 
   } catch (err) {
     console.error('Error en Doc Analyzer:', err.message)
-    return { suggestion: null, reason: 'Error al procesar el documento' }
+    return { suggestion: null, reason: 'Error al procesar el documento', extractedText: '' }
   }
 }
 
@@ -245,4 +302,4 @@ const detectFlags = (text) => {
   return { hasAmbulance, ambulanceCompany, hasReferral, referrals }
 }
 
-module.exports = { analyzeDocument, extractDates, detectFlags }
+module.exports = { analyzeDocument, extractDates, detectFlags, prepareTextForClaude }
