@@ -1,6 +1,9 @@
 const { pathToFileURL } = require('url')
 
-// Lazy loaders — evitan crash en Windows si canvas.node no es compatible
+// Both canvas and tesseract.js are optional native dependencies that can fail
+// to build on some platforms (e.g. Windows ARM, older Node versions).
+// Lazy-load them so a missing native module doesn't crash the entire backend —
+// ocrExtract simply returns '' when either is unavailable.
 let _createCanvas = null
 let _createWorker = null
 
@@ -9,7 +12,7 @@ function getCreateCanvas() {
     try {
       _createCanvas = require('canvas').createCanvas
     } catch (e) {
-      console.warn('[ocr] canvas no disponible:', e.message)
+      console.warn('[ocr] canvas not available:', e.message)
       _createCanvas = false
     }
   }
@@ -21,43 +24,42 @@ function getCreateWorker() {
     try {
       _createWorker = require('tesseract.js').createWorker
     } catch (e) {
-      console.warn('[ocr] tesseract.js no disponible:', e.message)
+      console.warn('[ocr] tesseract.js not available:', e.message)
       _createWorker = false
     }
   }
   return _createWorker || null
 }
 
-// Renderiza la primera página del PDF a un PNG buffer
+/**
+ * Renders the first page of a PDF to a PNG buffer for Tesseract.
+ * Scale 2.0 gives 144 DPI which is sufficient for Tesseract accuracy
+ * without excessive memory use.
+ *
+ * pdfjs-dist v5 is ESM-only, so it must be loaded with dynamic import().
+ */
 const pdfToImageBuffer = async (filePath) => {
   const createCanvas = getCreateCanvas()
   if (!createCanvas) throw new Error('canvas not available')
 
-  // pdfjs-dist v5 es ESM — usamos import() dinámico
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
   const fileUrl = pathToFileURL(filePath).href
   const loadingTask = pdfjsLib.getDocument({ url: fileUrl, verbosity: 0 })
-  const pdf = await loadingTask.promise
+  const pdf  = await loadingTask.promise
   const page = await pdf.getPage(1)
 
-  const scale = 2.0
+  const scale    = 2.0
   const viewport = page.getViewport({ scale })
-  const canvas = createCanvas(viewport.width, viewport.height)
-  const ctx = canvas.getContext('2d')
+  const canvas   = createCanvas(viewport.width, viewport.height)
+  const ctx      = canvas.getContext('2d')
 
   await page.render({
     canvasContext: ctx,
     viewport,
     canvasFactory: {
-      create: (w, h) => {
-        const c = createCanvas(w, h)
-        return { canvas: c, context: c.getContext('2d') }
-      },
-      reset: (data, w, h) => {
-        data.canvas.width  = w
-        data.canvas.height = h
-      },
+      create:  (w, h) => { const c = createCanvas(w, h); return { canvas: c, context: c.getContext('2d') } },
+      reset:   (data, w, h) => { data.canvas.width = w; data.canvas.height = h },
       destroy: () => {},
     },
   }).promise
@@ -65,6 +67,11 @@ const pdfToImageBuffer = async (filePath) => {
   return canvas.toBuffer('image/png')
 }
 
+/**
+ * Extracts text from a scanned PDF via Tesseract OCR.
+ * Returns an empty string (rather than throwing) so the caller can decide
+ * whether to surface an error or silently skip the document.
+ */
 const ocrExtract = async (filePath) => {
   const createWorker = getCreateWorker()
   if (!createWorker) return ''
@@ -73,7 +80,7 @@ const ocrExtract = async (filePath) => {
     const imageBuffer = await pdfToImageBuffer(filePath)
 
     const worker = await createWorker('eng', 1, {
-      logger: () => {},
+      logger:       () => {},
       errorHandler: () => {},
     })
 
@@ -82,7 +89,7 @@ const ocrExtract = async (filePath) => {
 
     return text || ''
   } catch (err) {
-    console.warn('[ocr] extracción fallida:', err.message)
+    console.warn('[ocr] extraction failed:', err.message)
     return ''
   }
 }

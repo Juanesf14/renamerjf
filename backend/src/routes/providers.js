@@ -6,10 +6,10 @@ const { authMiddleware, adminMiddleware } = require('../middleware/auth')
 
 const router = express.Router()
 
-// Todos necesitan estar autenticados
+// All provider routes require a valid JWT.
 router.use(authMiddleware)
 
-// GET / — cualquier usuario autenticado puede ver
+// GET /api/providers — returns all providers, optionally filtered by name/specialty or type.
 router.get('/', (req, res) => {
   const { q, type } = req.query
   let query = 'SELECT * FROM providers WHERE 1=1'
@@ -27,10 +27,11 @@ router.get('/', (req, res) => {
   res.json(providers)
 })
 
-// GET /suggest — cualquier usuario autenticado
+// POST /api/providers/suggest — fuzzy-matches a free-text string against provider names.
+// Used by the frontend to let users search without selecting from a dropdown.
 router.post('/suggest', (req, res) => {
   const { text } = req.body
-  if (!text) return res.status(400).json({ error: 'Texto requerido' })
+  if (!text) return res.status(400).json({ error: 'Text is required' })
   const providers = db.prepare('SELECT id, name FROM providers').all()
   if (providers.length === 0) return res.json({ suggestion: null })
   const fuse = new Fuse(providers, { keys: ['name'], threshold: 0.4, includeScore: true })
@@ -43,15 +44,15 @@ router.post('/suggest', (req, res) => {
       provider_id: best.item.id,
       name: best.item.name,
       confidence,
-      method: 'fuzzy'
+      method: 'fuzzy',
     }
   })
 })
 
-// GET /:id — cualquier usuario autenticado
+// GET /api/providers/:id — returns provider details plus their full rename history.
 router.get('/:id', (req, res) => {
   const provider = db.prepare('SELECT * FROM providers WHERE id = ?').get(req.params.id)
-  if (!provider) return res.status(404).json({ error: 'Provider no encontrado' })
+  if (!provider) return res.status(404).json({ error: 'Provider not found' })
   const history = db.prepare(`
     SELECT rh.*, dt.code, dt.label
     FROM rename_history rh
@@ -62,10 +63,10 @@ router.get('/:id', (req, res) => {
   res.json({ provider, history })
 })
 
-// POST, PUT, DELETE — solo admin
+// Write operations (create/update/delete) are restricted to admin users.
 router.post('/', adminMiddleware, (req, res) => {
   const { name, type, specialty, phone, fax, email, address, hours, portal_url, notes } = req.body
-  if (!name || !type) return res.status(400).json({ error: 'Nombre y tipo son requeridos' })
+  if (!name || !type) return res.status(400).json({ error: 'Name and type are required' })
   const id = uuidv4()
   db.prepare(`
     INSERT INTO providers (id, name, type, specialty, phone, fax, email, address, hours, portal_url, notes)
@@ -78,7 +79,7 @@ router.post('/', adminMiddleware, (req, res) => {
 router.put('/:id', adminMiddleware, (req, res) => {
   const { name, type, specialty, phone, fax, email, address, hours, portal_url, notes } = req.body
   const exists = db.prepare('SELECT id FROM providers WHERE id = ?').get(req.params.id)
-  if (!exists) return res.status(404).json({ error: 'Provider no encontrado' })
+  if (!exists) return res.status(404).json({ error: 'Provider not found' })
   db.prepare(`
     UPDATE providers SET
       name = ?, type = ?, specialty = ?, phone = ?, fax = ?,
@@ -91,7 +92,7 @@ router.put('/:id', adminMiddleware, (req, res) => {
 
 router.delete('/:id', adminMiddleware, (req, res) => {
   const exists = db.prepare('SELECT id FROM providers WHERE id = ?').get(req.params.id)
-  if (!exists) return res.status(404).json({ error: 'Provider no encontrado' })
+  if (!exists) return res.status(404).json({ error: 'Provider not found' })
   db.prepare('DELETE FROM providers WHERE id = ?').run(req.params.id)
   res.json({ success: true })
 })

@@ -1,12 +1,16 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai')
 
+// Document text is stored in memory keyed by sessionId rather than re-sent
+// on every chat turn. TTL is sliding: each message resets the expiry clock.
 const sessions = new Map()
-const SESSION_TTL = 30 * 60 * 1000 // 30 minutos
+const SESSION_TTL = 30 * 60 * 1000 // 30 minutes
 
+/** Stores extracted document text for a new chat session. */
 const storeSession = (sessionId, text) => {
   sessions.set(sessionId, { text, expiresAt: Date.now() + SESSION_TTL })
 }
 
+/** Returns the session and resets its TTL, or null if it has expired. */
 const getSession = (sessionId) => {
   const session = sessions.get(sessionId)
   if (!session) return null
@@ -18,7 +22,8 @@ const getSession = (sessionId) => {
   return session
 }
 
-// Limpiar sesiones expiradas cada 10 minutos
+// Periodic GC so memory doesn't grow unbounded in long-running server instances.
+// .unref() prevents this timer from keeping the process alive when all windows close.
 setInterval(() => {
   const now = Date.now()
   for (const [id, session] of sessions) {
@@ -26,6 +31,15 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000).unref()
 
+/**
+ * Sends a chat turn to Gemini with the document as system context.
+ * Only the last 10 messages are forwarded to stay within the context budget.
+ *
+ * Throws 'SESSION_EXPIRED' if the session is not found or has timed out.
+ *
+ * Note: Gemini uses role 'model' where the OpenAI convention uses 'assistant',
+ * and passes content as parts[] arrays instead of plain strings.
+ */
 const chatWithDocument = async (sessionId, messages) => {
   const session = getSession(sessionId)
   if (!session) throw new Error('SESSION_EXPIRED')
@@ -39,15 +53,14 @@ DOCUMENT:
 ${session.text}`,
   })
 
-  // Gemini usa 'model' en vez de 'assistant', y parts[] en vez de content string
-  const recent = messages.slice(-10)
-  const history = recent.slice(0, -1).map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
+  const recent      = messages.slice(-10)
+  const history     = recent.slice(0, -1).map(m => ({
+    role:  m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }))
   const lastMessage = recent[recent.length - 1]
 
-  const chat = model.startChat({ history })
+  const chat   = model.startChat({ history })
   const result = await chat.sendMessage(lastMessage.content)
   return result.response.text()
 }

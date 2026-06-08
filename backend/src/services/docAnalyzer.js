@@ -3,6 +3,8 @@ const pdfParse = require('pdf-parse')
 const Fuse = require('fuse.js')
 const { ocrExtract } = require('./ocr')
 
+// If pdf-parse extracts fewer than this many characters the PDF is likely scanned,
+// so we fall back to OCR before giving up on text extraction.
 const OCR_THRESHOLD = 50
 
 const extractText = async (filePath) => {
@@ -11,8 +13,12 @@ const extractText = async (filePath) => {
   return data.text || ''
 }
 
+/**
+ * Counts how many times a provider name appears in the document text.
+ * Short names (< 5 chars) use word boundaries to avoid spurious substring hits
+ * (e.g. "AMR" matching inside "pharmacy").
+ */
 const countOccurrences = (text, name) => {
-  // Para nombres cortos (< 5 chars) exige word boundary para evitar falsos positivos
   if (name.length < 5) {
     const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
     return (text.match(re) || []).length
@@ -25,6 +31,11 @@ const countOccurrences = (text, name) => {
   return count
 }
 
+/**
+ * Returns the provider whose name appears most often in the document (exact string match).
+ * Ambulance providers are penalised (×0.6) so they lose tie-breakers against hospitals
+ * or insurers — ambulance charges are secondary bills in most MVA cases.
+ */
 const exactMatch = (text, providers) => {
   let best = null
   let bestScore = 0
@@ -33,7 +44,6 @@ const exactMatch = (text, providers) => {
     const count = countOccurrences(text, p.name)
     if (count === 0) continue
 
-    // Ambulancias reciben un peso menor para perder en empate contra hospitales/aseguradoras
     const score = p.type === 'Ambulance' ? count * 0.6 : count
 
     if (score > bestScore) {
@@ -51,6 +61,12 @@ const exactMatch = (text, providers) => {
   return best
 }
 
+/**
+ * Slides a 4-word window across the document and fuzzy-matches each chunk against
+ * provider names. Accumulates hits per provider rather than returning on the first
+ * match, so a provider mentioned multiple times with slight OCR noise ranks higher.
+ * Returns null if the best match confidence is below 0.4.
+ */
 const fuzzyMatch = (text, providers) => {
   const words = text.replace(/\n/g, ' ').split(/\s+/).filter(w => w.length > 3)
   const chunks = []
@@ -58,14 +74,10 @@ const fuzzyMatch = (text, providers) => {
     chunks.push(words.slice(i, i + 4).join(' '))
   }
 
-  const fuse = new Fuse(providers, {
-    keys: ['name'],
-    threshold: 0.6,
-    includeScore: true
-  })
+  const fuse = new Fuse(providers, { keys: ['name'], threshold: 0.6, includeScore: true })
 
-  // Acumular el mejor score por provider (no retornar al primer match)
-  const scores = new Map() // provider_id → { item, bestScore, hits }
+  // provider_id → { item, bestScore, hits }
+  const scores = new Map()
 
   for (const chunk of chunks) {
     const results = fuse.search(chunk)
@@ -82,7 +94,7 @@ const fuzzyMatch = (text, providers) => {
 
   if (scores.size === 0) return null
 
-  // Elegir el provider con más hits; en empate, el de menor score (mejor match)
+  // Pick the provider with the most hits; break ties by lowest (best) Fuse score.
   let best = null
   for (const entry of scores.values()) {
     if (
@@ -101,14 +113,15 @@ const fuzzyMatch = (text, providers) => {
     provider_id: best.item.id,
     name: best.item.name,
     confidence,
-    method: 'fuzzy'
+    method: 'fuzzy',
   }
 }
 
-// Normaliza una fecha detectada a formato yyyy-mm-dd para el input type="date"
+/** Normalises a detected date to yyyy-mm-dd for HTML <input type="date">. */
 const normalizeDate = (m, d, y) => {
   const month = m.padStart(2, '0')
   const day   = d.padStart(2, '0')
+  // 2-digit years: ≤50 → 2000s, >50 → 1900s (handles legacy documents)
   const year  = y.length === 2 ? (parseInt(y) > 50 ? `19${y}` : `20${y}`) : y
   return `${year}-${month}-${day}`
 }
@@ -122,26 +135,33 @@ const isRecentYear = (yyyy) => {
   return y >= 2000 && y <= 2099
 }
 
+/**
+ * Extracts DOS (date of service) and statement/update dates from the document.
+ *
+ * DOS detection uses a priority cascade so explicit labels win over bare dates:
+ *   1. Labelled range  "DOS: 01/25/2023 – 01/26/2023"
+ *   2. Labelled single "DOS: 04/18/2026"
+ *   3. "Date of Service" prose label (with optional range)
+ *   4. "Service Date" label
+ *   5. Fallback: all valid dates in the doc — earliest = dosStart, latest = dosEnd
+ *
+ * updateDate is extracted independently using statement/printed/as-of labels.
+ */
 const extractDates = (text) => {
   let m
   const result = {}
 
-  // --- DOS (cascada, para en el primer match) ---
-
-  // Prioridad 1: rango explícito "DOS: 01/25/2023 - 01/26/2023"
   m = new RegExp(`DOS[\\s:]+${DATE_RE_SRC}\\s*[-–to]+\\s*${DATE_RE_SRC}`, 'gi').exec(text)
   if (m) {
     result.dosStart = parseDateMatch(m, 1)
     result.dosEnd   = parseDateMatch(m, 4)
   }
 
-  // Prioridad 2: DOS single "DOS: 04/18/2026"
   if (!result.dosStart) {
     m = new RegExp(`DOS[\\s:]+${DATE_RE_SRC}`, 'gi').exec(text)
     if (m) result.dosStart = parseDateMatch(m, 1)
   }
 
-  // Prioridad 3: "Date of Service" con o sin separador (formato tabla)
   if (!result.dosStart) {
     m = new RegExp(`Date\\s+of\\s+Service[:\\s]*${DATE_RE_SRC}(?:[^\\d]*${DATE_RE_SRC})?`, 'gi').exec(text)
     if (m) {
@@ -150,19 +170,17 @@ const extractDates = (text) => {
     }
   }
 
-  // Prioridad 4: "Service Date" label
   if (!result.dosStart) {
     m = new RegExp(`Service\\s+Date[:\\s]*${DATE_RE_SRC}`, 'gi').exec(text)
     if (m) result.dosStart = parseDateMatch(m, 1)
   }
 
-  // Fallback: todas las fechas recientes del documento
   if (!result.dosStart) {
     const allDates = []
     const allRe = new RegExp(DATE_RE_SRC, 'g')
     while ((m = allRe.exec(text)) !== null) {
-      const month  = parseInt(m[1])
-      const day    = parseInt(m[2])
+      const month   = parseInt(m[1])
+      const day     = parseInt(m[2])
       const yearRaw = m[3].length === 2 ? (parseInt(m[3]) > 50 ? `19${m[3]}` : `20${m[3]}`) : m[3]
       if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && isRecentYear(yearRaw)) {
         allDates.push(normalizeDate(m[1], m[2], m[3]))
@@ -173,7 +191,7 @@ const extractDates = (text) => {
     if (sorted.length > 1) result.dosEnd   = sorted[sorted.length - 1]
   }
 
-  // --- updateDate: siempre independiente del DOS ---
+  // updateDate is always extracted independently of DOS.
   m = new RegExp(
     `(?:statement\\s+date|printed\\s+date|updated?\\s+as\\s+of|as\\s+of\\s+date)[:\\s]*${DATE_RE_SRC}`,
     'gi'
@@ -183,15 +201,25 @@ const extractDates = (text) => {
   return result
 }
 
+/**
+ * Strips numeric table rows and trims whitespace before sending text to Gemini.
+ * Medical bills contain dense charge tables that waste tokens without adding
+ * meaning for provider identification or date extraction.
+ */
 const prepareTextForClaude = (text) => {
   return text
     .slice(0, 3000)
-    .replace(/^\s*[\d\s.\-|,$]{15,}\s*$/gm, '') // líneas que son tablas de números
+    .replace(/^\s*[\d\s.\-|,$]{15,}\s*$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]{4,}/g, '   ')
     .trim()
 }
 
+/**
+ * Main entry point. Tries pdf-parse first; falls back to Tesseract OCR if the
+ * extracted text is shorter than OCR_THRESHOLD (indicating a scanned image PDF).
+ * Always returns extractedText so the caller can store it for the chat session.
+ */
 const analyzeDocument = async (filePath, providers) => {
   try {
     let text = await extractText(filePath)
@@ -202,12 +230,12 @@ const analyzeDocument = async (filePath, providers) => {
         text = await ocrExtract(filePath)
         usedOcr = true
       } catch (ocrErr) {
-        console.error('OCR fallback falló:', ocrErr.message)
+        console.error('OCR fallback failed:', ocrErr.message)
       }
     }
 
     if (!text || text.trim().length === 0)
-      return { suggestion: null, reason: 'No se pudo extraer texto del documento', extractedText: '' }
+      return { suggestion: null, reason: 'Could not extract text from document', extractedText: '' }
 
     const dates = extractDates(text)
     const flags = detectFlags(text)
@@ -218,17 +246,17 @@ const analyzeDocument = async (filePath, providers) => {
     const fuzzy = fuzzyMatch(text, providers)
     if (fuzzy) return { suggestion: fuzzy, dates, flags, usedOcr, extractedText: text }
 
-    return { suggestion: null, dates, flags, usedOcr, reason: 'No se encontró coincidencia', extractedText: text }
+    return { suggestion: null, dates, flags, usedOcr, reason: 'No match found', extractedText: text }
 
   } catch (err) {
-    console.error('Error en Doc Analyzer:', err.message)
-    return { suggestion: null, reason: 'Error al procesar el documento', extractedText: '' }
+    console.error('Doc analyzer error:', err.message)
+    return { suggestion: null, reason: 'Error processing document', extractedText: '' }
   }
 }
 
 const AMBULANCE_PATTERNS = [
   /\bambulance\b/i,
-  /\bEMS\b/,                          // uppercase solo — evita "systems"
+  /\bEMS\b/,   // uppercase-only to avoid matching "systems"
   /\bEMT\b/,
   /\bparamedic/i,
   /\bemergency\s+medical\s+(service|transport)/i,

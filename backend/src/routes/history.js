@@ -7,7 +7,8 @@ const router = express.Router()
 
 router.use(authMiddleware)
 
-// POST guardar un renombrado
+// POST /api/history — records a completed rename operation for audit and reporting.
+// pip_exhausted is stored as a SQLite integer (0/1) since SQLite has no boolean type.
 router.post('/', (req, res) => {
   const {
     provider_id,
@@ -17,13 +18,13 @@ router.post('/', (req, res) => {
     dos_start,
     dos_end,
     update_date,
-    pip_exhausted
+    pip_exhausted,
   } = req.body
 
   if (!original_name || !new_name)
-    return res.status(400).json({ error: 'Nombre original y nuevo son requeridos' })
+    return res.status(400).json({ error: 'Original and new file names are required' })
 
-  const id = uuidv4()
+  const id      = uuidv4()
   const user_id = req.user.id
 
   db.prepare(`
@@ -42,7 +43,7 @@ router.post('/', (req, res) => {
   res.status(201).json(record)
 })
 
-// GET historial del usuario actual
+// GET /api/history — returns rename history for the currently authenticated user only.
 router.get('/', (req, res) => {
   const history = db.prepare(`
     SELECT rh.*, dt.code, dt.label, p.name as provider_name

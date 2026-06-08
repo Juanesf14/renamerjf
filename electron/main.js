@@ -5,13 +5,24 @@ const crypto = require('crypto')
 
 const isProd = app.isPackaged
 
-// En la versión pública no hay DB pre-cargada — se crea vacía en userData
+/**
+ * Points DB_PATH to the OS user-data directory so the database survives
+ * app updates (which would otherwise wipe the app bundle's working dir).
+ */
 function ensureDatabase() {
   const userDataDb = path.join(app.getPath('userData'), 'renamerjf.db')
   process.env.DB_PATH = userDataDb
   fs.mkdirSync(path.dirname(userDataDb), { recursive: true })
 }
 
+/**
+ * Boots the Express backend in-process. Only runs in packaged (production) builds;
+ * in dev the backend is started separately via `npm run dev` in the backend folder.
+ *
+ * Seed credentials are read from the .env before first launch:
+ *   SEED_ADMIN_NAME / EMAIL / PASSWORD
+ *   SEED_USER_NAME  / EMAIL / PASSWORD
+ */
 function startBackend() {
   if (!isProd) return
 
@@ -20,11 +31,8 @@ function startBackend() {
   process.env.NODE_ENV = 'production'
   process.env.PORT     = process.env.PORT || '3001'
 
-  // Credenciales seed — configurar en .env antes del primer inicio
-  // SEED_ADMIN_NAME, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
-  // SEED_USER_NAME,  SEED_USER_EMAIL,  SEED_USER_PASSWORD
-
-  // JWT_SECRET: usa variable de entorno si existe, si no genera uno persistente
+  // Generate a persistent JWT secret on first launch and reuse it across restarts
+  // so existing tokens stay valid after an update.
   if (!process.env.JWT_SECRET) {
     const secretFile = path.join(app.getPath('userData'), '.jwt_secret')
     if (fs.existsSync(secretFile)) {
@@ -38,10 +46,10 @@ function startBackend() {
 
   try {
     require('../backend/src/index.js')
-    console.log('[backend] iniciado en puerto', process.env.PORT)
+    console.log('[backend] started on port', process.env.PORT)
   } catch (err) {
-    console.error('[backend] error al iniciar:', err)
-    dialog.showErrorBox('Error al iniciar backend', err.message + '\n\n' + err.stack)
+    console.error('[backend] startup error:', err)
+    dialog.showErrorBox('Backend startup error', err.message + '\n\n' + err.stack)
   }
 }
 
@@ -51,7 +59,7 @@ function createWindow() {
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
+      contextIsolation: true,  // renderer cannot access Node APIs directly
       nodeIntegration: false,
     },
   })
@@ -65,6 +73,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   startBackend()
+  // In production, give the backend time to bind its port before the window loads.
   const delay = isProd ? 1500 : 0
   setTimeout(createWindow, delay)
 })
@@ -77,7 +86,7 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
 
-// Normaliza separadores de path para Windows
+// Normalise Windows backslashes so the frontend can use the path in string operations.
 const normPath = p => (p || '').replace(/\\/g, '/')
 
 ipcMain.handle('select-folder', async () => {
@@ -89,8 +98,8 @@ ipcMain.handle('select-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [
-      { name: 'Documentos', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] },
-      { name: 'Todos los archivos', extensions: ['*'] },
+      { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] },
+      { name: 'All files', extensions: ['*'] },
     ],
   })
   if (result.canceled) return null

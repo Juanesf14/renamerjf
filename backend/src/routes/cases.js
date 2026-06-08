@@ -2,7 +2,10 @@ const express = require('express')
 const router  = express.Router()
 const db      = require('../db/schema')
 
-// ── GET /api/cases ────────────────────────────────────────────────────
+// Cases routes are intentionally unauthenticated — the case tracker is used
+// within the trusted local Electron app where network exposure is minimal.
+
+// GET /api/cases — all cases, newest first.
 router.get('/', (req, res) => {
   try {
     const cases = db.prepare('SELECT * FROM cases ORDER BY added_on DESC').all()
@@ -12,7 +15,7 @@ router.get('/', (req, res) => {
   }
 })
 
-// ── POST /api/cases ───────────────────────────────────────────────────
+// POST /api/cases — creates a single case; rejects duplicate case numbers.
 router.post('/', (req, res) => {
   const c = req.body
   if (!c.num) return res.status(400).json({ error: 'num is required' })
@@ -74,7 +77,7 @@ router.post('/', (req, res) => {
   }
 })
 
-// ── DELETE /api/cases/:num ────────────────────────────────────────────
+// DELETE /api/cases/:num — deletes by case number (the human-readable identifier).
 router.delete('/:num', (req, res) => {
   try {
     const info = db.prepare('DELETE FROM cases WHERE num = ?').run(req.params.num)
@@ -85,9 +88,10 @@ router.delete('/:num', (req, res) => {
   }
 })
 
-// ── POST /api/cases/import ────────────────────────────────────────────
+// POST /api/cases/import — bulk-inserts an array of cases inside a transaction.
+// Uses INSERT OR IGNORE so re-importing the same export is safe.
 router.post('/import', (req, res) => {
-  const rows  = req.body   // array of case objects
+  const rows = req.body
   if (!Array.isArray(rows)) return res.status(400).json({ error: 'Expected array' })
 
   const insertStmt = db.prepare(`

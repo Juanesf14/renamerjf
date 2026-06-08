@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs')
 const { v4: uuidv4 } = require('uuid')
 const path = require('path')
 
+// DB_PATH is injected by main.js in production to point to the OS userData directory.
+// The fallback path is used during development.
 const dbPath = process.env.DB_PATH || path.join(__dirname, '../../renamerjf.db')
 const db = new Database(dbPath)
 
@@ -67,7 +69,7 @@ db.exec(`
   );
 `)
 
-// Seed de document_types si la tabla está vacía
+// Seed document types once on first run — codes are used as filename prefixes.
 const count = db.prepare('SELECT COUNT(*) as count FROM document_types').get()
 if (count.count === 0) {
   const insert = db.prepare('INSERT INTO document_types (code, label) VALUES (?, ?)')
@@ -78,13 +80,15 @@ if (count.count === 0) {
     ['LT', 'Letter'],
     ['RX', 'Prescription'],
     ['IN', 'Insurance'],
-    ['OT', 'Other']
+    ['OT', 'Other'],
   ]
   types.forEach(([code, label]) => insert.run(code, label))
   console.log('Document types seeded.')
 }
 
-// Seed de usuarios iniciales desde variables de entorno (primer arranque)
+// Seed initial users from environment variables on first launch.
+// Credentials are defined in .env and never committed to source control.
+// Partial seeds are supported: rows with missing name/email/password are skipped.
 const usersCount = db.prepare('SELECT COUNT(*) as count FROM users').get()
 if (usersCount.count === 0) {
   const seedUsers = [
