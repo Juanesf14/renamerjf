@@ -9,9 +9,10 @@
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build:frontend": "npm run build --workspace=frontend",
-    "build:mac": "npm run build:frontend && electron-builder --mac",
-    "build:win": "npm run build:frontend && electron-builder --win",
-    "build:all": "npm run build:frontend && electron-builder --mac --win"
+    "rebuild:native": "electron-rebuild -f",
+    "build:mac": "npm run build:frontend && npm run rebuild:native && electron-builder --mac",
+    "build:win": "npm run build:frontend && npm run rebuild:native && electron-builder --win",
+    "build:all": "npm run build:frontend && npm run rebuild:native && electron-builder --mac"
   },
   "workspaces": [
     "frontend"
@@ -68,7 +69,7 @@
         "en_US"
       ]
     },
-    "npmRebuild": true
+    "npmRebuild": false
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
@@ -79,6 +80,7 @@
     "wait-on": "^9.0.5"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.9.0",
     "canvas": "^3.2.3",
