@@ -2,12 +2,12 @@ const { GoogleGenerativeAI } = require('@google/generative-ai')
 
 /**
  * Secondary analysis pass using Gemini Flash Lite.
- * Called by /api/analyze only when regex + fuzzy confidence is below 0.75.
+ * Called by /api/analyze only when regex + fuzzy confidence is below threshold.
  *
  * Returns a parsed JSON object with provider match, dates, and flags,
  * or null on any API/parse error (the caller falls back gracefully).
  */
-const analyzeWithClaude = async (text, providers) => {
+const analyzeWithAI = async (text, providers) => {
   if (!process.env.GEMINI_API_KEY) return null
 
   const providerList = providers.map(p => `- "${p.name}" (id: ${p.id})`).join('\n')
@@ -41,9 +41,9 @@ Respond with this exact JSON (null for missing fields):
     const clean = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
     return JSON.parse(clean)
   } catch (err) {
-    console.error('Gemini analyzer error:', err.message)
+    console.error('AI analyzer error:', err.message)
     return null
   }
 }
 
-module.exports = { analyzeWithClaude }
+module.exports = { analyzeWithAI }

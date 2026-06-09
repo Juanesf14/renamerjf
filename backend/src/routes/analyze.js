@@ -2,9 +2,9 @@ const express = require('express')
 const path = require('path')
 const { v4: uuidv4 } = require('uuid')
 const { authMiddleware } = require('../middleware/auth')
-const { analyzeDocument, prepareTextForClaude } = require('../services/docAnalyzer')
-const { analyzeWithClaude } = require('../services/claudeAnalyzer')
-const { storeSession } = require('../services/claudeChat')
+const { analyzeDocument, prepareTextForAI } = require('../services/docAnalyzer')
+const { analyzeWithAI } = require('../services/aiAnalyzer')
+const { storeSession } = require('../services/aiChat')
 const db = require('../db/schema')
 
 const router = express.Router()
@@ -76,35 +76,35 @@ router.post('/', async (req, res) => {
   // Escalate to Gemini when AI is needed AND the user has consented.
   if (needsAI && allowAI && process.env.GEMINI_API_KEY && result.extractedText) {
     try {
-      const cleanText = prepareTextForClaude(result.extractedText)
-      const claudeResult = await analyzeWithClaude(cleanText, providers)
+      const cleanText = prepareTextForAI(result.extractedText)
+      const aiResult = await analyzeWithAI(cleanText, providers)
 
-      if (claudeResult) {
-        // Override the regex provider match only if Gemini is more confident.
-        if (claudeResult.provider_id && claudeResult.confidence > (result.suggestion?.confidence || 0)) {
+      if (aiResult) {
+        // Override the regex provider match only if AI is more confident.
+        if (aiResult.provider_id && aiResult.confidence > (result.suggestion?.confidence || 0)) {
           result.suggestion = {
-            provider_id: claudeResult.provider_id,
-            name: claudeResult.provider_name,
-            confidence: claudeResult.confidence,
-            method: 'claude',
+            provider_id: aiResult.provider_id,
+            name: aiResult.provider_name,
+            confidence: aiResult.confidence,
+            method: 'ai',
           }
         }
 
         // Backfill dates that the regex failed to capture.
         if (!result.dates) result.dates = {}
-        if (!result.dates.dosStart   && claudeResult.dosStart)   result.dates.dosStart   = claudeResult.dosStart
-        if (!result.dates.dosEnd     && claudeResult.dosEnd)     result.dates.dosEnd     = claudeResult.dosEnd
-        if (!result.dates.updateDate && claudeResult.updateDate) result.dates.updateDate = claudeResult.updateDate
+        if (!result.dates.dosStart   && aiResult.dosStart)   result.dates.dosStart   = aiResult.dosStart
+        if (!result.dates.dosEnd     && aiResult.dosEnd)     result.dates.dosEnd     = aiResult.dosEnd
+        if (!result.dates.updateDate && aiResult.updateDate) result.dates.updateDate = aiResult.updateDate
 
         // Backfill flags that the regex patterns didn't catch.
         if (!result.flags) result.flags = {}
-        if (!result.flags.hasAmbulance && claudeResult.hasAmbulance) {
-          result.flags.hasAmbulance     = claudeResult.hasAmbulance
-          result.flags.ambulanceCompany = claudeResult.ambulanceCompany
+        if (!result.flags.hasAmbulance && aiResult.hasAmbulance) {
+          result.flags.hasAmbulance     = aiResult.hasAmbulance
+          result.flags.ambulanceCompany = aiResult.ambulanceCompany
         }
-        if (!result.flags.hasReferral && claudeResult.hasReferral) {
-          result.flags.hasReferral = claudeResult.hasReferral
-          result.flags.referrals   = claudeResult.referrals || []
+        if (!result.flags.hasReferral && aiResult.hasReferral) {
+          result.flags.hasReferral = aiResult.hasReferral
+          result.flags.referrals   = aiResult.referrals || []
         }
       }
     } catch (err) {

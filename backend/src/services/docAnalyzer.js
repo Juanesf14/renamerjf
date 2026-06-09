@@ -210,7 +210,7 @@ const extractDates = (text) => {
  * Medical bills contain dense charge tables that waste tokens without adding
  * meaning for provider identification or date extraction.
  */
-const prepareTextForClaude = (text) => {
+const prepareTextForAI = (text) => {
   return text
     .slice(0, 3000)
     .replace(/^\s*[\d\s.\-|,$]{15,}\s*$/gm, '')
@@ -348,4 +348,4 @@ const detectFlags = (text) => {
   return { hasAmbulance, ambulanceCompany, hasReferral, referrals }
 }
 
-module.exports = { analyzeDocument, extractDates, detectFlags, prepareTextForClaude }
+module.exports = { analyzeDocument, extractDates, detectFlags, prepareTextForAI }

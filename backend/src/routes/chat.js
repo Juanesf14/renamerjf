@@ -1,6 +1,6 @@
 const express = require('express')
 const { authMiddleware } = require('../middleware/auth')
-const { chatWithDocument } = require('../services/claudeChat')
+const { chatWithDocument } = require('../services/aiChat')
 
 const router = express.Router()
 
@@ -13,7 +13,7 @@ router.use(authMiddleware)
  * server-side session created by /api/analyze.
  *
  * Body: { sessionId: string, messages: Array<{ role, content }> }
- * Sessions expire after 30 minutes of inactivity (see claudeChat.js).
+ * Sessions expire after 30 minutes of inactivity (see aiChat.js).
  */
 router.post('/', async (req, res) => {
   const { sessionId, messages } = req.body
