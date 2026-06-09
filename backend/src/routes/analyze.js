@@ -60,15 +60,21 @@ router.post('/', async (req, res) => {
 
   const lowConfidence = !result.suggestion || result.suggestion.confidence < GEMINI_THRESHOLD
 
-  // If local confidence is low but AI consent hasn't been granted, tell the
-  // frontend so it can show the consent modal before re-calling with allowAI=true.
-  if (lowConfidence && !allowAI) {
+  // Also offer AI when the provider was matched locally but critical dates are
+  // missing — Gemini is significantly better at extracting dates from unusual
+  // formats (handwritten, non-standard labels, etc.) than the local regex.
+  const missingKeyDates = !result.dates?.dosStart
+  const needsAI = lowConfidence || missingKeyDates
+
+  // If AI is needed but consent hasn't been granted, return the local result
+  // with needsAI=true so the frontend can show the consent modal first.
+  if (needsAI && !allowAI) {
     const { extractedText: _, ...localData } = result
     return res.json({ ...localData, sessionId, needsAI: true })
   }
 
-  // Escalate to Gemini only when confidence is low AND the user has consented.
-  if (lowConfidence && allowAI && process.env.GEMINI_API_KEY && result.extractedText) {
+  // Escalate to Gemini when AI is needed AND the user has consented.
+  if (needsAI && allowAI && process.env.GEMINI_API_KEY && result.extractedText) {
     try {
       const cleanText = prepareTextForClaude(result.extractedText)
       const claudeResult = await analyzeWithClaude(cleanText, providers)
