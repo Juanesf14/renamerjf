@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import api from '../services/api'
 import ChatPanel from './ChatPanel'
 import AIConsentModal from './AIConsentModal'
+import FilePreview from './FilePreview'
 
 export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [docTypes, setDocTypes] = useState([])
@@ -20,10 +21,20 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [flags, setFlags] = useState(null)
   const [sessionId, setSessionId] = useState(null)
   const [chatOpen, setChatOpen] = useState(false)
-  // AI consent is requested once per session before sending any document to Gemini.
-  // Not persisted to localStorage — each app session requires a fresh acknowledgement.
-  const [aiConsent, setAiConsent] = useState(null) // null = not asked | 'pending' | 'granted' | 'denied'
-  const [pendingFile, setPendingFile] = useState(null) // file waiting for consent
+
+  // Active tab: 'rename' shows the form, 'preview' shows the document viewer.
+  const [activeTab, setActiveTab] = useState('rename')
+
+  // Preview data loaded from main process via read-file-base64 IPC.
+  // null = not loaded, 'loading' = in-flight, object = ready.
+  const [previewData, setPreviewData] = useState(null)
+
+  // AI consent is tracked for the session (not persisted to localStorage).
+  // The modal appears AFTER local analysis returns with low confidence — not
+  // when the file is loaded — so the form already shows what was found locally.
+  // null = not asked yet | 'pending' = modal open | 'granted' | 'denied'
+  const [aiConsent, setAiConsent] = useState(null)
+  const [pendingFile, setPendingFile] = useState(null) // file waiting for AI consent
 
   useEffect(() => {
     api.get('/document-types').then(({ data }) => setDocTypes(data))
@@ -80,10 +91,31 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
     setNewName(name)
   }
 
-  // Core analysis logic — called after consent is confirmed.
-  const runAnalysis = async (file) => {
+  /**
+   * Loads the file bytes from the main process and stores a base64 data-URL
+   * so the Preview tab can render without needing file:// access.
+   */
+  const loadPreview = async (file) => {
+    setPreviewData('loading')
     try {
-      const { data } = await api.post('/analyze', { filePath: file.path })
+      const result = await window.electronAPI.readFileBase64(file.path)
+      setPreviewData(result || null)
+    } catch {
+      setPreviewData(null)
+    }
+  }
+
+  /**
+   * Sends the file to the backend for text extraction + provider matching.
+   *
+   * allowAI (default false) controls whether the backend is permitted to call
+   * Gemini.  When false and confidence < 25%, the server returns needsAI=true
+   * instead of calling Gemini, and this function shows the consent modal.
+   * When the user accepts, this is called again with allowAI=true.
+   */
+  const runAnalysis = async (file, allowAI = false) => {
+    try {
+      const { data } = await api.post('/analyze', { filePath: file.path, allowAI })
       const filled = {}
 
       if (data.sessionId) setSessionId(data.sessionId)
@@ -104,6 +136,13 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
 
       setAutoFilledFields(filled)
       if (data.flags) setFlags(data.flags)
+
+      // Server says local confidence is below 25% and AI could help.
+      // Only ask for consent if the user hasn't decided yet this session.
+      if (data.needsAI && aiConsent === null) {
+        setPendingFile(file)
+        setAiConsent('pending')
+      }
     } catch (err) {
       console.error('Analysis error:', err)
     }
@@ -115,42 +154,41 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
 
     setCurrentFile(file)
     setSuggestedProvider(null)
+    setAutoFilledFields({})
+    setFlags(null)
+    setSessionId(null)
+
+    // Start loading the preview in the background for all file types.
+    loadPreview(file)
 
     // Only PDF and image files can be analyzed.
     const ext = file.name.split('.').pop().toLowerCase()
     const analyzable = ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'bmp', 'webp']
     if (!analyzable.includes(ext)) return
 
-    // If consent was already granted this session, analyze immediately.
+    // If the user already granted AI consent this session, run the full pipeline.
     if (aiConsent === 'granted') {
-      runAnalysis(file)
+      runAnalysis(file, true)
       return
     }
 
-    // If consent was denied, still set the file but skip AI analysis entirely.
-    if (aiConsent === 'denied') {
-      runAnalysis(file) // local-only (server still runs regex/fuzzy, no Gemini)
-      return
-    }
-
-    // First time — show the consent modal before sending anything to the server.
-    setPendingFile(file)
-    setAiConsent('pending')
+    // For all other cases (first-time or previously denied) run local-only first.
+    // If confidence is low AND consent hasn't been decided, runAnalysis will
+    // set aiConsent='pending' and show the modal after the result comes back.
+    runAnalysis(file, false)
   }
 
   const handleConsentAccept = () => {
     setAiConsent('granted')
-    if (pendingFile) runAnalysis(pendingFile)
+    // Re-run with AI enabled — this replaces the local-only result in state.
+    if (pendingFile) runAnalysis(pendingFile, true)
     setPendingFile(null)
   }
 
   const handleConsentCancel = () => {
     setAiConsent('denied')
-    // Still run local analysis (regex + fuzzy), just no Gemini escalation.
-    // The server only calls Gemini if GEMINI_API_KEY is set, so no special
-    // flag is needed — local analysis always runs regardless of consent.
-    if (pendingFile) runAnalysis(pendingFile)
     setPendingFile(null)
+    // Local-only result is already in state from the first runAnalysis call — nothing to redo.
   }
 
   const handleRename = async () => {
@@ -185,6 +223,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       setFlags(null)
       setSessionId(null)
       setChatOpen(false)
+      setPreviewData(null)
+      setActiveTab('rename')
       alert(`✅ Archivo renombrado: ${newFullName}`)
       setForm({ docType: '', dosStart: '', dosEnd: '', updateDate: '', pipExhausted: 'N' })
       if (onRenameSuccess) onRenameSuccess()
@@ -205,6 +245,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
     setFlags(null)
     setSessionId(null)
     setChatOpen(false)
+    setPreviewData(null)
+    setActiveTab('rename')
   }
 
   return (
@@ -218,14 +260,38 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
 
       <h3 style={styles.title}>File Renamer</h3>
 
+      {/* ── Tab bar ────────────────────────────────────────────────── */}
       <div style={styles.tabs}>
-        <span style={styles.tabActive}>File Selection</span>
+        <button
+          style={activeTab === 'rename' ? styles.tabActive : styles.tabInactive}
+          onClick={() => setActiveTab('rename')}
+        >
+          Rename
+        </button>
+        <button
+          style={activeTab === 'preview'
+            ? styles.tabActive
+            : currentFile ? styles.tabInactive : styles.tabDisabled}
+          onClick={() => currentFile && setActiveTab('preview')}
+          disabled={!currentFile}
+          title={!currentFile ? 'Select a file first' : undefined}
+        >
+          Preview {previewData === 'loading' ? '…' : ''}
+        </button>
       </div>
 
-      <div style={styles.preview} onClick={handleSelectFile}>
+      {/* ── PREVIEW tab ────────────────────────────────────────────── */}
+      {activeTab === 'preview' && (
+        <FilePreview file={currentFile} previewData={previewData} />
+      )}
+
+      {/* ── RENAME tab ─────────────────────────────────────────────── */}
+      {activeTab === 'rename' && <>
+
+      <div style={styles.dropZone} onClick={handleSelectFile}>
         {currentFile
           ? <p style={styles.previewText}>📄 {currentFile.name}</p>
-          : <p style={styles.previewPlaceholder}>Click para seleccionar archivo</p>
+          : <p style={styles.previewPlaceholder}>Click to select a file</p>
         }
       </div>
 
@@ -355,6 +421,8 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
           onClose={() => setChatOpen(false)}
         />
       )}
+
+      </> /* end Rename tab */}
     </div>
   )
 }
@@ -380,16 +448,38 @@ const styles = {
     letterSpacing: '0.05em',
     textTransform: 'uppercase',
   },
-  tabs: { display: 'flex', gap: 8 },
+  tabs: { display: 'flex', gap: 6 },
   tabActive: {
     color: '#F5F0E8',
     fontSize: 12,
-    padding: '3px 12px',
+    padding: '4px 14px',
     background: '#243447',
     borderRadius: 2,
-    border: '1px solid #2E4057',
+    border: '1px solid #C9A84C',
+    cursor: 'pointer',
+    fontFamily: "'Inter', system-ui, sans-serif",
   },
-  preview: {
+  tabInactive: {
+    color: '#8B95A1',
+    fontSize: 12,
+    padding: '4px 14px',
+    background: 'transparent',
+    borderRadius: 2,
+    border: '1px solid #2E4057',
+    cursor: 'pointer',
+    fontFamily: "'Inter', system-ui, sans-serif",
+  },
+  tabDisabled: {
+    color: '#3A4A5A',
+    fontSize: 12,
+    padding: '4px 14px',
+    background: 'transparent',
+    borderRadius: 2,
+    border: '1px solid #1E2D3D',
+    cursor: 'not-allowed',
+    fontFamily: "'Inter', system-ui, sans-serif",
+  },
+  dropZone: {
     minHeight: 76,
     background: '#243447',
     borderRadius: 3,

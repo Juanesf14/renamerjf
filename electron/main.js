@@ -98,7 +98,10 @@ ipcMain.handle('select-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [
-      { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] },
+      {
+        name: 'Documents & Images',
+        extensions: ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'bmp', 'webp'],
+      },
       { name: 'All files', extensions: ['*'] },
     ],
   })
@@ -118,4 +121,33 @@ ipcMain.handle('read-folder', async (_, folderPath) => {
 ipcMain.handle('rename-file', async (_, { oldPath, newPath }) => {
   fs.renameSync(oldPath, newPath)
   return { success: true }
+})
+
+// MIME types for every file extension the analyzer and previewer support.
+const PREVIEW_MIME = {
+  '.pdf':  'application/pdf',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png':  'image/png',
+  '.tiff': 'image/tiff',
+  '.tif':  'image/tiff',
+  '.bmp':  'image/bmp',
+  '.webp': 'image/webp',
+}
+
+/**
+ * Returns the file at filePath as a base64 string plus its MIME type.
+ * The renderer uses these to build a data-URL preview (iframe for PDFs,
+ * <img> for images) without relaxing webSecurity or registering custom protocols.
+ *
+ * Returns null for non-existent or relative paths so the renderer can
+ * show a graceful "preview not available" state.
+ */
+ipcMain.handle('read-file-base64', (_, filePath) => {
+  if (!filePath || !path.isAbsolute(filePath)) return null
+  if (!fs.existsSync(filePath)) return null
+  const ext      = path.extname(filePath).toLowerCase()
+  const mimeType = PREVIEW_MIME[ext] || 'application/octet-stream'
+  const buffer   = fs.readFileSync(filePath)
+  return { base64: buffer.toString('base64'), mimeType }
 })

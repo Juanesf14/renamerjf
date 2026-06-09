@@ -12,19 +12,34 @@ const router = express.Router()
 router.use(authMiddleware)
 
 /**
+ * Minimum local-analysis confidence below which Gemini is invoked.
+ * The caller must also pass allowAI=true (explicit user consent per session).
+ */
+const GEMINI_THRESHOLD = 0.25
+
+/**
  * POST /api/analyze
  *
  * Pipeline:
- *  1. Extract text from the PDF (with OCR fallback for scanned docs).
+ *  1. Extract text from the file (PDF text layer, OCR fallback, or direct image OCR).
  *  2. Run regex + fuzzy matching against the provider list.
- *  3. If confidence < 0.75, escalate to Gemini for a second opinion.
- *  4. Store extracted text in a server-side session so the chat endpoint
+ *  3. If local confidence < GEMINI_THRESHOLD AND the caller passed allowAI=true,
+ *     escalate to Gemini for a second opinion.
+ *  4. If local confidence < GEMINI_THRESHOLD AND allowAI=false (default), return
+ *     needsAI=true so the UI can ask for consent before a second call.
+ *  5. Store extracted text in a server-side session so the chat endpoint
  *     can answer follow-up questions without re-uploading the file.
  *
- * Returns: suggestion, dates, flags, sessionId (extractedText is stripped from the response).
+ * Body params:
+ *   filePath  {string}  Absolute OS path to the document.
+ *   allowAI   {boolean} Whether the user has consented to Gemini for this call.
+ *                       Defaults to false — the UI must explicitly opt in.
+ *
+ * Returns: suggestion, dates, flags, sessionId, needsAI?
+ *          (extractedText is stripped — it lives server-side in the session).
  */
 router.post('/', async (req, res) => {
-  const { filePath } = req.body
+  const { filePath, allowAI = false } = req.body
   if (!filePath) return res.status(400).json({ error: 'filePath is required' })
 
   // Reject relative paths — the renderer must always send an absolute OS path.
@@ -43,9 +58,17 @@ router.post('/', async (req, res) => {
     return res.json({ suggestion: null, reason: 'No providers registered', sessionId })
   }
 
-  // Escalate to Gemini only when regex/fuzzy confidence is below the threshold.
-  const lowConfidence = !result.suggestion || result.suggestion.confidence < 0.75
-  if (lowConfidence && process.env.GEMINI_API_KEY && result.extractedText) {
+  const lowConfidence = !result.suggestion || result.suggestion.confidence < GEMINI_THRESHOLD
+
+  // If local confidence is low but AI consent hasn't been granted, tell the
+  // frontend so it can show the consent modal before re-calling with allowAI=true.
+  if (lowConfidence && !allowAI) {
+    const { extractedText: _, ...localData } = result
+    return res.json({ ...localData, sessionId, needsAI: true })
+  }
+
+  // Escalate to Gemini only when confidence is low AND the user has consented.
+  if (lowConfidence && allowAI && process.env.GEMINI_API_KEY && result.extractedText) {
     try {
       const cleanText = prepareTextForClaude(result.extractedText)
       const claudeResult = await analyzeWithClaude(cleanText, providers)
