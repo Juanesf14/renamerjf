@@ -232,7 +232,7 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       if (onRenameSuccess) onRenameSuccess()
 
     } catch (err) {
-      console.error('Error al renombrar:', err)
+      console.error('Rename error:', err)
       alert('❌ Failed to rename the file')
     }
   }
