@@ -10,7 +10,7 @@ export default function ProviderCard({ provider, refreshTrigger }) {
       const { data } = await api.get(`/providers/${provider.id}`)
       setDetail(data)
     } catch (err) {
-      console.error('Error cargando detalle', err)
+      console.error('Failed to load provider detail', err)
     }
   }, [provider])
 
@@ -21,11 +21,11 @@ export default function ProviderCard({ provider, refreshTrigger }) {
 
   if (!provider) return (
     <div style={styles.empty}>
-      <p>Selecciona un provider para ver su detalle</p>
+      <p>Select a provider to view its details</p>
     </div>
   )
 
-  if (!detail) return <div style={styles.empty}><p>Cargando...</p></div>
+  if (!detail) return <div style={styles.empty}><p>Loading...</p></div>
 
   const { provider: p, history } = detail
 
@@ -48,7 +48,7 @@ export default function ProviderCard({ provider, refreshTrigger }) {
         {p.portal_url && (
           <p style={styles.row}>
             🔗 <a href={p.portal_url} style={styles.link} target="_blank" rel="noreferrer">
-              Portal web
+              Provider portal
             </a>
           </p>
         )}
@@ -56,9 +56,9 @@ export default function ProviderCard({ provider, refreshTrigger }) {
       </div>
 
       <div style={styles.historySection}>
-        <p style={styles.historyTitle}>Historial de archivos</p>
+        <p style={styles.historyTitle}>Rename history</p>
         {history.length === 0 ? (
-          <p style={styles.historyEmpty}>Sin archivos renombrados aún</p>
+          <p style={styles.historyEmpty}>No files renamed yet</p>
         ) : (
           history.map(h => (
             <div key={h.id} style={styles.historyItem}>

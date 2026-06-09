@@ -227,13 +227,13 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       setChatOpen(false)
       setPreviewData(null)
       setActiveTab('rename')
-      alert(`✅ Archivo renombrado: ${newFullName}`)
+      alert(`✅ File renamed: ${newFullName}`)
       setForm({ docType: '', dosStart: '', dosEnd: '', updateDate: '', pipExhausted: 'N' })
       if (onRenameSuccess) onRenameSuccess()
 
     } catch (err) {
       console.error('Error al renombrar:', err)
-      alert('❌ Error al renombrar el archivo')
+      alert('❌ Failed to rename the file')
     }
   }
 
@@ -333,7 +333,7 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
       <div style={styles.field}>
         <label style={styles.label}>Document Type</label>
         <select name="docType" value={form.docType} onChange={handleChange} style={styles.input}>
-          <option value="">Seleccionar...</option>
+          <option value="">Select...</option>
           {docTypes.map(dt => (
             <option key={dt.id} value={dt.code}>{dt.code} – {dt.label}</option>
           ))}
@@ -344,7 +344,7 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
         <label style={styles.label}>Entity (hospital/insurance)</label>
         <input
           style={styles.input}
-          placeholder="Escribe o selecciona un provider..."
+          placeholder="Type or select a provider..."
           value={entityName}
           onChange={e => setEntityName(e.target.value)}
         />

@@ -24,7 +24,7 @@ export default function ChatPanel({ sessionId, documentName, onClose }) {
       const { data } = await api.post('/chat', { sessionId, messages: newHistory })
       setMessages(m => [...m, { role: 'assistant', content: data.reply }])
     } catch (err) {
-      const errMsg = err.response?.data?.error || 'Error al conectar con la IA'
+      const errMsg = err.response?.data?.error || 'Failed to connect to AI service'
       setMessages(m => [...m, { role: 'assistant', content: `❌ ${errMsg}` }])
     } finally {
       setLoading(false)

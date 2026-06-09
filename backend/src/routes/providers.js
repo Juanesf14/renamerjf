@@ -97,4 +97,49 @@ router.delete('/:id', adminMiddleware, (req, res) => {
   res.json({ success: true })
 })
 
+// POST /api/providers/import — bulk-insert providers from a CSV-parsed array.
+// Rows with a name that already exists (case-insensitive) are skipped.
+// Body: { providers: [ { name, type, specialty, phone, fax, email, address, hours, portal_url, notes }, … ] }
+router.post('/import', adminMiddleware, (req, res) => {
+  const rows = req.body?.providers
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'providers array is required' })
+  }
+
+  const insert = db.prepare(`
+    INSERT INTO providers (id, name, type, specialty, phone, fax, email, address, hours, portal_url, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const checkName = db.prepare('SELECT id FROM providers WHERE LOWER(name) = LOWER(?)')
+
+  let imported = 0
+  let skipped  = 0
+
+  const importAll = db.transaction(() => {
+    for (const row of rows) {
+      const name = (row.name || '').trim()
+      if (!name) { skipped++; continue }
+
+      if (checkName.get(name)) { skipped++; continue }
+
+      const type = row.type || 'Medical Provider'
+      insert.run(
+        uuidv4(), name, type,
+        row.specialty   || null,
+        row.phone       || null,
+        row.fax         || null,
+        row.email       || null,
+        row.address     || null,
+        row.hours       || null,
+        row.portal_url  || null,
+        row.notes       || null,
+      )
+      imported++
+    }
+  })
+
+  importAll()
+  res.json({ imported, skipped })
+})
+
 module.exports = router

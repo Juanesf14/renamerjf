@@ -113,7 +113,7 @@ export default function BatchRenamer() {
           }
         }))
       } catch {
-        updateItem(item.id, { status: 'error', error: 'Error al analizar' })
+        updateItem(item.id, { status: 'error', error: 'Analysis failed' })
       }
     }
 
@@ -148,7 +148,7 @@ export default function BatchRenamer() {
 
         updateItem(item.id, { status: 'done' })
       } catch {
-        updateItem(item.id, { status: 'error', error: 'Error al renombrar' })
+        updateItem(item.id, { status: 'error', error: 'Rename failed' })
       } finally {
         setRenamingIds(s => { const n = new Set(s); n.delete(item.id); return n })
       }

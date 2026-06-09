@@ -45,7 +45,7 @@ export default function Login({ onLogin }) {
             <input
               style={styles.input}
               name="name"
-              placeholder="Nombre completo"
+              placeholder="Full name"
               value={form.name}
               onChange={handleChange}
               required
@@ -64,7 +64,7 @@ export default function Login({ onLogin }) {
             style={styles.input}
             name="password"
             type="password"
-            placeholder="Contraseña"
+            placeholder="Password"
             value={form.password}
             onChange={handleChange}
             required
@@ -76,13 +76,13 @@ export default function Login({ onLogin }) {
             </div>
           )}
           <button style={styles.button} type="submit" disabled={loading}>
-            {loading ? 'Cargando...' : isRegister ? 'Registrarse' : 'Iniciar sesión'}
+            {loading ? 'Loading...' : isRegister ? 'Sign up' : 'Sign in'}
           </button>
         </form>
         <p style={styles.toggle}>
-          {isRegister ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}{' '}
+          {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
           <span style={styles.link} onClick={() => setIsRegister(!isRegister)}>
-            {isRegister ? 'Inicia sesión' : 'Regístrate'}
+            {isRegister ? 'Sign in' : 'Sign up'}
           </span>
         </p>
       </div>

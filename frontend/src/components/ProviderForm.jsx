@@ -50,7 +50,7 @@ export default function ProviderForm({ provider, onSave, onCancel }) {
       }
       onSave()
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al guardar')
+      setError(err.response?.data?.error || 'Failed to save')
     } finally {
       setLoading(false)
     }
@@ -60,13 +60,13 @@ export default function ProviderForm({ provider, onSave, onCancel }) {
     <div style={styles.overlay}>
       <div style={styles.modal}>
         <h3 style={styles.title}>
-          {provider ? 'Editar Provider' : 'Nuevo Provider'}
+          {provider ? 'Edit Provider' : 'New Provider'}
         </h3>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.row}>
             <div style={styles.field}>
-              <label style={styles.label}>Nombre *</label>
+              <label style={styles.label}>Name *</label>
               <input
                 style={styles.input}
                 name="name"
@@ -77,7 +77,7 @@ export default function ProviderForm({ provider, onSave, onCancel }) {
               />
             </div>
            <div style={styles.field}>
-                <label style={styles.label}>Categoría *</label>
+                <label style={styles.label}>Category *</label>
                 <select name="type" value={form.type} onChange={handleChange} style={styles.input}>
                     <option value="Medical Provider">Medical Provider</option>
                     <option value="Insurance">Insurance</option>
@@ -88,7 +88,7 @@ export default function ProviderForm({ provider, onSave, onCancel }) {
 
           <div style={styles.row}>
             <div style={styles.field}>
-              <label style={styles.label}>Teléfono</label>
+              <label style={styles.label}>Phone</label>
               <input style={styles.input} name="phone" value={form.phone} onChange={handleChange} placeholder="(555) 000-0000" />
             </div>
             <div style={styles.field}>
@@ -103,20 +103,20 @@ export default function ProviderForm({ provider, onSave, onCancel }) {
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Dirección</label>
+            <label style={styles.label}>Address</label>
             <input style={styles.input} name="address" value={form.address} onChange={handleChange} placeholder="123 Main St, City, ST 00000" />
           </div>
 
           <div style={styles.row}>
             <div style={styles.field}>
-              <label style={styles.label}>Horario</label>
+              <label style={styles.label}>Business Hours</label>
               <input style={styles.input} name="hours" value={form.hours} onChange={handleChange} placeholder="Open 24 hours" />
             </div>
              </div>
         <div style={styles.field}>
-            <label style={styles.label}>Especialidad</label>
+            <label style={styles.label}>Specialty</label>
             <select name="specialty" value={form.specialty} onChange={handleChange} style={styles.input}>
-                            <option value="">Seleccionar...</option>
+                            <option value="">Select...</option>
                 <option>Acupuncture</option>
                 <option>Ambulance</option>
                 <option>Anesthesia</option>
@@ -170,13 +170,13 @@ export default function ProviderForm({ provider, onSave, onCancel }) {
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Notas</label>
+            <label style={styles.label}>Notes</label>
             <textarea
               style={{ ...styles.input, height: 70, resize: 'none' }}
               name="notes"
               value={form.notes}
               onChange={handleChange}
-              placeholder="Información adicional..."
+              placeholder="Additional information..."
             />
           </div>
 
@@ -184,10 +184,10 @@ export default function ProviderForm({ provider, onSave, onCancel }) {
 
           <div style={styles.actions}>
             <button type="button" style={styles.btnCancel} onClick={onCancel}>
-              Cancelar
+              Cancel
             </button>
             <button type="submit" style={styles.btnSave} disabled={loading}>
-              {loading ? 'Guardando...' : provider ? 'Guardar cambios' : 'Crear provider'}
+              {loading ? 'Saving...' : provider ? 'Save changes' : 'Add provider'}
             </button>
           </div>
         </form>

@@ -1,6 +1,26 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../services/api'
 import ProviderForm from './ProviderForm'
+
+// Minimal CSV parser: handles quoted fields with embedded commas and newlines.
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return []
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+  return lines.slice(1).map(line => {
+    const values = []
+    let cur = '', inQ = false
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ }
+      else if (line[i] === ',' && !inQ) { values.push(cur); cur = '' }
+      else cur += line[i]
+    }
+    values.push(cur)
+    const obj = {}
+    headers.forEach((h, i) => { obj[h] = (values[i] || '').trim() })
+    return obj
+  })
+}
 
 export default function ProviderList({ onSelect, selectedId }) {
   const [providers, setProviders] = useState([])
@@ -8,13 +28,15 @@ export default function ProviderList({ onSelect, selectedId }) {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingProvider, setEditingProvider] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const csvInputRef = useRef(null)
 
   const fetchProviders = useCallback(async (q = '') => {
     try {
       const { data } = await api.get('/providers', { params: { q } })
       setProviders(data)
     } catch (err) {
-      console.error('Error cargando providers', err)
+      console.error('Failed to load providers', err)
     } finally {
       setLoading(false)
     }
@@ -43,12 +65,32 @@ export default function ProviderList({ onSelect, selectedId }) {
 
   const handleDelete = async (e, provider) => {
     e.stopPropagation()
-    if (!confirm('¿Eliminar ' + provider.name + '?')) return
+    if (!confirm('Delete ' + provider.name + '?')) return
     try {
       await api.delete('/providers/' + provider.id)
       fetchProviders(search)
     } catch (err) {
-      console.error('Error eliminando provider', err)
+      console.error('Failed to delete provider', err)
+    }
+  }
+
+  const handleImportCsv = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''   // reset so the same file can be re-selected
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const rows = parseCsv(text)
+      if (rows.length === 0) { alert('No valid rows found in CSV.'); return }
+      const { data } = await api.post('/providers/import', { providers: rows })
+      alert(`✅ Import complete: ${data.imported} added, ${data.skipped} skipped.`)
+      fetchProviders(search)
+    } catch (err) {
+      console.error('Import error', err)
+      alert('❌ Failed to import CSV.')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -63,11 +105,30 @@ export default function ProviderList({ onSelect, selectedId }) {
 
   return (
     <div style={styles.container}>
+      {/* Hidden CSV file input */}
+      <input
+        ref={csvInputRef}
+        type="file"
+        accept=".csv"
+        style={{ display: 'none' }}
+        onChange={handleImportCsv}
+      />
+
       <div style={styles.header}>
         <h3 style={styles.title}>Medical Contacts</h3>
-        <button style={styles.btnNew} onClick={() => { setEditingProvider(null); setShowForm(true) }}>
-          + Nuevo
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            style={styles.btnImport}
+            onClick={() => csvInputRef.current?.click()}
+            disabled={importing}
+            title="Import providers from CSV"
+          >
+            {importing ? '…' : '⬆ CSV'}
+          </button>
+          <button style={styles.btnNew} onClick={() => { setEditingProvider(null); setShowForm(true) }}>
+            + New
+          </button>
+        </div>
       </div>
 
       <input
@@ -78,9 +139,9 @@ export default function ProviderList({ onSelect, selectedId }) {
       />
 
       {loading ? (
-        <p style={styles.empty}>Cargando...</p>
+        <p style={styles.empty}>Loading...</p>
       ) : providers.length === 0 ? (
-        <p style={styles.empty}>No hay providers registrados</p>
+        <p style={styles.empty}>No providers registered yet</p>
       ) : (
         <div style={styles.list}>
           {providers.map(p => (
@@ -139,6 +200,17 @@ const styles = {
     fontFamily: "'Cormorant Garamond', Georgia, serif",
     fontWeight: 600,
     letterSpacing: '0.03em',
+  },
+  btnImport: {
+    padding: '4px 10px',
+    borderRadius: 3,
+    border: '1px solid #2E4057',
+    background: 'transparent',
+    color: '#8B95A1',
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+    letterSpacing: '0.04em',
   },
   btnNew: {
     padding: '4px 12px',
