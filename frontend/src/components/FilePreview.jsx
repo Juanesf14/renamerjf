@@ -3,23 +3,18 @@ import { useState } from 'react'
 /**
  * FilePreview
  *
- * Renders a live preview of the currently loaded document inside the
- * "Preview" tab, with zoom in / zoom out controls.
+ * Renders a live preview of the currently loaded document with zoom controls.
  *
- *  - PDFs  → <iframe> using Chromium's built-in PDF viewer, scaled via
- *            a CSS transform wrapper inside a scrollable container.
- *  - Images → <img> whose width grows/shrinks proportionally with zoom.
+ * PDFs  → <iframe> with Chromium's built-in PDF viewer.
+ *         Zoom is passed via the #zoom=X URL fragment so the PDF engine
+ *         re-renders at the requested DPI — no CSS pixel-scaling, no blur.
  *
- * Both use a base64 data-URL built from bytes fetched via the
- * read-file-base64 IPC channel — no file:// access or custom protocol
- * required, so webSecurity stays enabled.
+ * Images → <img> whose width changes proportionally; the browser uses
+ *          bicubic interpolation so it stays sharp.
  *
  * Props:
- *   file        {object|null}  The file object from electronAPI.selectFile().
- *   previewData {null|'loading'|{base64, mimeType}}
- *               null      — no file loaded or load failed
- *               'loading' — IPC call in-flight
- *               object    — ready to render
+ *   file        {object|null}
+ *   previewData {null | 'loading' | { base64, mimeType }}
  */
 export default function FilePreview({ file, previewData }) {
   const [zoom, setZoom] = useState(1)
@@ -28,7 +23,7 @@ export default function FilePreview({ file, previewData }) {
   const zoomOut   = () => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))
   const resetZoom = () => setZoom(1)
 
-  /* ── No file selected ─────────────────────────────────────────────── */
+  /* ── No file selected ──────────────────────────────────────────────── */
   if (!file) {
     return (
       <div style={styles.empty}>
@@ -41,7 +36,7 @@ export default function FilePreview({ file, previewData }) {
     )
   }
 
-  /* ── Loading ───────────────────────────────────────────────────────── */
+  /* ── Loading ────────────────────────────────────────────────────────── */
   if (previewData === 'loading') {
     return (
       <div style={styles.empty}>
@@ -51,7 +46,7 @@ export default function FilePreview({ file, previewData }) {
     )
   }
 
-  /* ── Load failed / unsupported type ───────────────────────────────── */
+  /* ── Load failed / unsupported ─────────────────────────────────────── */
   if (!previewData) {
     return (
       <div style={styles.empty}>
@@ -65,7 +60,7 @@ export default function FilePreview({ file, previewData }) {
   const { base64, mimeType } = previewData
   const dataUrl = `data:${mimeType};base64,${base64}`
 
-  /* ── Zoom toolbar (shared by PDF and image) ───────────────────────── */
+  /* ── Shared zoom toolbar ───────────────────────────────────────────── */
   const toolbar = (
     <div style={styles.toolbar}>
       <span style={styles.fileName}>{file.name}</span>
@@ -79,33 +74,27 @@ export default function FilePreview({ file, previewData }) {
     </div>
   )
 
-  /* ── PDF ──────────────────────────────────────────────────────────── */
+  /* ── PDF ────────────────────────────────────────────────────────────── */
   if (mimeType === 'application/pdf') {
-    // The iframe is placed inside a wrapper that grows with zoom.
-    // The outer scroll container lets the user pan when zoomed in.
+    // Pass zoom via the #zoom fragment so Chromium's PDF engine renders
+    // at that resolution — sharp text at any zoom level, no pixel scaling.
+    const pdfSrc = `${dataUrl}#zoom=${Math.round(zoom * 100)}`
+
     return (
       <div style={styles.outerWrap}>
         {toolbar}
-        <div style={styles.scrollArea}>
-          <div style={{
-            transformOrigin: 'top left',
-            transform: `scale(${zoom})`,
-            // When zoomed out the wrapper collapses; force minimum height.
-            width:  `${100 / zoom}%`,
-            height: `${Math.max(500, 500 * zoom)}px`,
-          }}>
-            <iframe
-              src={dataUrl}
-              style={styles.frame}
-              title={file.name}
-            />
-          </div>
-        </div>
+        {/* iframe fills all remaining height; the PDF viewer handles its own scroll */}
+        <iframe
+          key={pdfSrc}        /* force remount on zoom change so the fragment is honoured */
+          src={pdfSrc}
+          style={styles.frame}
+          title={file.name}
+        />
       </div>
     )
   }
 
-  /* ── Image ────────────────────────────────────────────────────────── */
+  /* ── Image ──────────────────────────────────────────────────────────── */
   if (mimeType.startsWith('image/')) {
     return (
       <div style={styles.outerWrap}>
@@ -121,7 +110,7 @@ export default function FilePreview({ file, previewData }) {
     )
   }
 
-  /* ── Fallback ─────────────────────────────────────────────────────── */
+  /* ── Fallback ───────────────────────────────────────────────────────── */
   return (
     <div style={styles.empty}>
       <span style={styles.emptyIcon}>🚫</span>
@@ -158,7 +147,6 @@ const styles = {
     minHeight: 0,
   },
 
-  /* Toolbar row: filename on the left, zoom controls on the right */
   toolbar: {
     display: 'flex',
     alignItems: 'center',
@@ -172,6 +160,9 @@ const styles = {
     letterSpacing: '0.04em',
     wordBreak: 'break-all',
     flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   zoomControls: {
     display: 'flex',
@@ -207,7 +198,18 @@ const styles = {
     fontFamily: "'Inter', system-ui, sans-serif",
   },
 
-  /* Scrollable viewport for zoomed content */
+  /* PDF iframe — fills remaining height, PDF viewer manages its own scroll */
+  frame: {
+    flex: 1,
+    width: '100%',
+    minHeight: 500,
+    border: '1px solid #2E4057',
+    borderRadius: 3,
+    display: 'block',
+    background: '#fff',
+  },
+
+  /* Image scroll container */
   scrollArea: {
     flex: 1,
     overflow: 'auto',
@@ -216,16 +218,6 @@ const styles = {
     background: '#1a1a1a',
     minHeight: 400,
   },
-
-  frame: {
-    width: '100%',
-    height: '100%',
-    minHeight: 500,
-    border: 'none',
-    display: 'block',
-    background: '#fff',
-  },
-
   image: {
     display: 'block',
     maxWidth: '100%',
