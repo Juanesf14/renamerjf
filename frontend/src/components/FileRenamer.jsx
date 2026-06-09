@@ -3,6 +3,7 @@ import api from '../services/api'
 import ChatPanel from './ChatPanel'
 import AIConsentModal from './AIConsentModal'
 import FilePreview from './FilePreview'
+import DateField from './DateField'
 
 export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
   const [docTypes, setDocTypes] = useState([])
@@ -355,9 +356,10 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
             <label style={styles.label}>
               DOS Start {autoFilledFields.dosStart && <span style={styles.autoBadge}>auto</span>}
             </label>
-            <input
+            <DateField
+              name="dosStart"
+              value={form.dosStart}
               style={{ ...styles.input, ...(autoFilledFields.dosStart ? styles.inputAuto : {}) }}
-              type="date" name="dosStart" value={form.dosStart}
               onChange={e => { handleChange(e); setAutoFilledFields(f => ({ ...f, dosStart: false })) }}
             />
           </div>
@@ -365,9 +367,10 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
             <label style={styles.label}>
               DOS End {autoFilledFields.dosEnd && <span style={styles.autoBadge}>auto</span>}
             </label>
-            <input
+            <DateField
+              name="dosEnd"
+              value={form.dosEnd}
               style={{ ...styles.input, ...(autoFilledFields.dosEnd ? styles.inputAuto : {}) }}
-              type="date" name="dosEnd" value={form.dosEnd}
               onChange={e => { handleChange(e); setAutoFilledFields(f => ({ ...f, dosEnd: false })) }}
             />
           </div>
@@ -379,9 +382,10 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
           <label style={styles.label}>
             Updated as of {autoFilledFields.updateDate && <span style={styles.autoBadge}>auto</span>}
           </label>
-          <input
+          <DateField
+            name="updateDate"
+            value={form.updateDate}
             style={{ ...styles.input, ...(autoFilledFields.updateDate ? styles.inputAuto : {}) }}
-            type="date" name="updateDate" value={form.updateDate}
             onChange={e => { handleChange(e); setAutoFilledFields(f => ({ ...f, updateDate: false })) }}
           />
         </div>

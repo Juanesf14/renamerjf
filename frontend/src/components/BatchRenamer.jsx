@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import api from '../services/api'
+import DateField from './DateField'
 
 const DOC_TYPES = [
   { code: 'B',   label: 'Medical Bills' },
@@ -312,10 +313,9 @@ function BatchRow({ item, renaming, onToggle, onFormChange }) {
 
       <td style={styles.td}>
         {(form.docType === 'B' || form.docType === 'MR') && (
-          <input
-            style={styles.cellInput}
-            type="date"
+          <DateField
             value={form.dosStart}
+            style={styles.cellInput}
             onChange={e => onFormChange({ dosStart: e.target.value })}
             disabled={status === 'done'}
           />
@@ -324,10 +324,9 @@ function BatchRow({ item, renaming, onToggle, onFormChange }) {
 
       <td style={styles.td}>
         {(form.docType === 'B' || form.docType === 'MR') && (
-          <input
-            style={styles.cellInput}
-            type="date"
+          <DateField
             value={form.dosEnd}
+            style={styles.cellInput}
             onChange={e => onFormChange({ dosEnd: e.target.value })}
             disabled={status === 'done'}
           />
@@ -336,10 +335,9 @@ function BatchRow({ item, renaming, onToggle, onFormChange }) {
 
       <td style={styles.td}>
         {(form.docType === 'B' || form.docType === 'HL' || form.docType === 'PIP') && (
-          <input
-            style={styles.cellInput}
-            type="date"
+          <DateField
             value={form.updateDate}
+            style={styles.cellInput}
             onChange={e => onFormChange({ updateDate: e.target.value })}
             disabled={status === 'done'}
           />

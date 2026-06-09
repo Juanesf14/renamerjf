@@ -11,12 +11,14 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// On 401, clear credentials and force a full reload to show the login screen.
-// This handles both expired tokens and revoked sessions without needing a router.
+// On 401, force a full reload ONLY when the user had an active session
+// (i.e. a token exists). This handles expired or revoked tokens.
+// When there is no token the user is on the login screen — propagate the
+// error normally so the login form can display the "wrong password" banner.
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && localStorage.getItem('token')) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.reload()
