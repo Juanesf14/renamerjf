@@ -8,10 +8,11 @@ const DOC_TYPES = [
   { code: 'PIP', label: 'PIP Log' },
 ]
 
+// Formats yyyy-mm-dd (from <input type="date">) to MM/DD/YYYY for file names.
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
   const [y, m, d] = dateStr.split('-')
-  return `${m}.${d}.${y.slice(2)}`
+  return `${m}/${d}/${y}`
 }
 
 const buildName = ({ docType, entityName, dosStart, dosEnd, updateDate, pipExhausted }) => {

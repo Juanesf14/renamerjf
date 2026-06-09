@@ -50,10 +50,11 @@ export default function FileRenamer({ selectedProvider, onRenameSuccess }) {
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
+  // Formats yyyy-mm-dd (from <input type="date">) to MM/DD/YYYY for file names.
   const formatDate = (dateStr) => {
     if (!dateStr) return ''
     const [y, m, d] = dateStr.split('-')
-    return `${m}.${d}.${y.slice(2)}`
+    return `${m}/${d}/${y}`
   }
 
   const buildName = () => {

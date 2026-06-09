@@ -21,7 +21,15 @@ export default function Login({ onLogin }) {
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user)
     } catch (err) {
-      setError(err.response?.data?.error || 'Error de conexión')
+      // Map generic backend messages to user-friendly text.
+      const raw = err.response?.data?.error || ''
+      if (raw === 'Invalid credentials') {
+        setError('Wrong email or password. Please try again.')
+      } else if (raw) {
+        setError(raw)
+      } else {
+        setError('Connection error — make sure the app backend is running.')
+      }
     } finally {
       setLoading(false)
     }
@@ -61,7 +69,12 @@ export default function Login({ onLogin }) {
             onChange={handleChange}
             required
           />
-          {error && <p style={styles.error}>{error}</p>}
+          {error && (
+            <div style={styles.errorBanner}>
+              <span style={styles.errorIcon}>⚠</span>
+              <span>{error}</span>
+            </div>
+          )}
           <button style={styles.button} type="submit" disabled={loading}>
             {loading ? 'Cargando...' : isRegister ? 'Registrarse' : 'Iniciar sesión'}
           </button>
@@ -139,10 +152,21 @@ const styles = {
     letterSpacing: '0.06em',
     textTransform: 'uppercase',
   },
-  error: {
+  errorBanner: {
+    background: 'rgba(252, 129, 129, 0.08)',
+    border: '1px solid rgba(252, 129, 129, 0.35)',
+    borderRadius: 3,
+    padding: '10px 14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
     color: '#fc8181',
     fontSize: 13,
-    margin: 0,
+    lineHeight: 1.4,
+  },
+  errorIcon: {
+    fontSize: 15,
+    flexShrink: 0,
   },
   toggle: {
     color: '#556270',
