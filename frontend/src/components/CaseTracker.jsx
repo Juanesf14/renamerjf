@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import * as XLSX from 'xlsx'
 import api from '../services/api'
+import BillingPanel from './BillingPanel'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHECKPOINT_COLORS = {
@@ -602,7 +603,7 @@ function ImportCSVModal({ onImport, onClose, existingNums }) {
 }
 
 // ─── CaseList ─────────────────────────────────────────────────────────────────
-function CaseList({ cases, onDelete }) {
+function CaseList({ cases, onDelete, onBilling }) {
   const [search, setSearch] = useState('')
   const filtered = search
     ? cases.filter(c =>
@@ -646,7 +647,12 @@ function CaseList({ cases, onDelete }) {
                 <td style={s.listTd}>{c.c15}</td>
                 <td style={s.listTd}>{c.completed ? <span style={{ color: '#68d391' }}>✓</span> : ''}</td>
                 <td style={s.listTd}>
-                  <button style={s.deleteBtn} onClick={() => onDelete(c.num)}>✕</button>
+                  <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                    <button style={s.billingBtn} onClick={() => onBilling(c)} title="Billing Calculator">
+                      $
+                    </button>
+                    <button style={s.deleteBtn} onClick={() => onDelete(c.num)}>✕</button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -667,6 +673,7 @@ export default function CaseTracker() {
   const [showImport, setShowImport]   = useState(false)
   const [view, setView]               = useState('calendar') // 'calendar' | 'list'
   const [loading, setLoading]         = useState(true)
+  const [billingCase, setBillingCase] = useState(null) // case row for BillingPanel
 
   // ── Load cases ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -900,7 +907,7 @@ export default function CaseTracker() {
             )}
           </>
         ) : (
-          <CaseList cases={cases} onDelete={handleDelete} />
+          <CaseList cases={cases} onDelete={handleDelete} onBilling={setBillingCase} />
         )}
       </div>
 
@@ -917,6 +924,12 @@ export default function CaseTracker() {
           onImport={handleImport}
           onClose={() => setShowImport(false)}
           existingNums={existingNums}
+        />
+      )}
+      {billingCase && (
+        <BillingPanel
+          caseData={billingCase}
+          onClose={() => setBillingCase(null)}
         />
       )}
     </div>
@@ -1057,6 +1070,11 @@ const s = {
   deleteBtn: {
     background: 'none', border: 'none', color: '#fc8181',
     cursor: 'pointer', fontSize: 12, padding: '2px 6px',
+  },
+  billingBtn: {
+    background: '#1a365d', border: '1px solid #2b6cb0',
+    color: '#63b3ed', cursor: 'pointer', fontSize: 12,
+    padding: '2px 7px', borderRadius: 4, fontWeight: 700,
   },
 
   // Modals

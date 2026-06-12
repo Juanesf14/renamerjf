@@ -10,6 +10,7 @@ const historyRoutes  = require('./routes/history')
 const analyzeRoutes  = require('./routes/analyze')
 const casesRoutes    = require('./routes/cases')
 const chatRoutes     = require('./routes/chat')
+const billingRoutes  = require('./routes/billing')
 
 const app  = express()
 const PORT = process.env.PORT || 3001
@@ -24,6 +25,7 @@ app.use('/api/history',   historyRoutes)
 app.use('/api/analyze',   analyzeRoutes)
 app.use('/api/cases',     casesRoutes)
 app.use('/api/chat',      chatRoutes)
+app.use('/api/billing',   billingRoutes)
 
 // Public endpoint — document types are static reference data, no auth required.
 app.get('/api/document-types', (req, res) => {

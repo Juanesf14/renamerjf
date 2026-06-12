@@ -122,4 +122,53 @@ const ocrExtractImage = async (filePath) => {
   }
 }
 
-module.exports = { ocrExtract, ocrExtractImage }
+/**
+ * Extracts text from multiple pages of a scanned PDF via Tesseract OCR.
+ * Creates a single worker and reuses it across pages for efficiency.
+ * Used by the billing parser which may need more than page 1.
+ */
+const ocrExtractMultiPages = async (filePath, maxPages = 10) => {
+  const createCanvas = getCreateCanvas()
+  const createWorker = getCreateWorker()
+  if (!createCanvas || !createWorker) return ''
+
+  try {
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const fileUrl = pathToFileURL(filePath).href
+    const loadingTask = pdfjsLib.getDocument({ url: fileUrl, verbosity: 0 })
+    const pdf = await loadingTask.promise
+
+    const numPages = Math.min(pdf.numPages, maxPages)
+    const canvasFactory = {
+      create:  (w, h) => { const c = createCanvas(w, h); return { canvas: c, context: c.getContext('2d') } },
+      reset:   (data, w, h) => { data.canvas.width = w; data.canvas.height = h },
+      destroy: () => {},
+    }
+    const worker = await createWorker('eng', 1, {
+      logger:       () => {},
+      errorHandler: () => {},
+    })
+
+    const texts = []
+    for (let i = 1; i <= numPages; i++) {
+      const page     = await pdf.getPage(i)
+      const viewport = page.getViewport({ scale: 2.0 })
+      const canvas   = createCanvas(viewport.width, viewport.height)
+      await page.render({
+        canvasContext: canvas.getContext('2d'),
+        viewport,
+        canvasFactory,
+      }).promise
+      const { data: { text } } = await worker.recognize(canvas.toBuffer('image/png'))
+      texts.push(text || '')
+    }
+
+    await worker.terminate()
+    return texts.join('\n\n')
+  } catch (err) {
+    console.warn('[ocr] multi-page extraction failed:', err.message)
+    return ''
+  }
+}
+
+module.exports = { ocrExtract, ocrExtractImage, ocrExtractMultiPages }

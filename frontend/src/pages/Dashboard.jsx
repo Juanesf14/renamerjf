@@ -4,11 +4,13 @@ import ProviderCard from '../components/ProviderCard'
 import FileRenamer from '../components/FileRenamer'
 import BatchRenamer from '../components/BatchRenamer'
 import CaseTracker from '../components/CaseTracker'
+import BillingPanel from '../components/BillingPanel'
 
 export default function Dashboard({ user, onLogout }) {
   const [selectedProvider, setSelectedProvider] = useState(null)
   const [refreshTrigger, setRefreshTrigger]     = useState(0)
   const [mode, setMode]                         = useState('single') // 'single' | 'batch' | 'cases'
+  const [billingOpen, setBillingOpen]           = useState(false)
 
   const handleRenameSuccess = () => setRefreshTrigger(prev => prev + 1)
 
@@ -39,6 +41,10 @@ export default function Dashboard({ user, onLogout }) {
               📋 Cases
             </button>
           </div>
+
+          <button style={styles.billingNavBtn} onClick={() => setBillingOpen(true)}>
+            $ Billing
+          </button>
         </div>
 
         <div style={styles.topbarRight}>
@@ -46,6 +52,10 @@ export default function Dashboard({ user, onLogout }) {
           <button style={styles.logout} onClick={onLogout}>Log Out</button>
         </div>
       </div>
+
+      {billingOpen && (
+        <BillingPanel caseData={null} onClose={() => setBillingOpen(false)} />
+      )}
 
       {mode === 'single' ? (
         <div style={styles.layout}>
@@ -155,6 +165,17 @@ const styles = {
     color: '#556270',
     fontSize: 12,
     cursor: 'pointer',
+  },
+  billingNavBtn: {
+    padding: '4px 14px',
+    borderRadius: 3,
+    border: '1px solid #2b6cb0',
+    background: '#1a365d',
+    color: '#63b3ed',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+    letterSpacing: '0.04em',
   },
   layout: {
     display: 'grid',

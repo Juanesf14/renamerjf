@@ -56,6 +56,26 @@ db.exec(`
     FOREIGN KEY (doc_type_id) REFERENCES document_types(id)
   );
 
+  CREATE TABLE IF NOT EXISTS billing_summaries (
+    id TEXT PRIMARY KEY,
+    case_num TEXT,
+    provider_id TEXT,
+    file_path TEXT,
+    total_charges REAL DEFAULT 0,
+    total_adjustments REAL DEFAULT 0,
+    pip_paid REAL DEFAULT 0,
+    health_ins_paid REAL DEFAULT 0,
+    patient_paid REAL DEFAULT 0,
+    outstanding REAL DEFAULT 0,
+    confidence REAL DEFAULT 0,
+    source TEXT DEFAULT 'local',
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT,
+    FOREIGN KEY (case_num) REFERENCES cases(num),
+    FOREIGN KEY (provider_id) REFERENCES providers(id),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
   CREATE TABLE IF NOT EXISTS cases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     num TEXT UNIQUE NOT NULL,
