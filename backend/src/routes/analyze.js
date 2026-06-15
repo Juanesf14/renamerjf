@@ -55,10 +55,12 @@ router.post('/', async (req, res) => {
   storeSession(sessionId, result.extractedText || '')
 
   if (providers.length === 0) {
-    // Dates and flags come from the document itself, not the provider list —
-    // return them so the UI can pre-fill DOS / update date even with no providers.
+    // The entity name, dates and flags all come from the document itself, not
+    // the provider list — return them so the UI can pre-fill the Entity field
+    // and dates even when no providers are registered yet.
     return res.json({
       suggestion: null,
+      detectedEntity: result.detectedEntity,
       reason: 'No providers registered',
       dates: result.dates,
       flags: result.flags,
